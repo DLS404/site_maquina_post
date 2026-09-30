@@ -1,0 +1,293 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Simulador de Máquina de Post</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <header class="topo">
+        <div>
+            <h1>Simulador de Máquina de Post</h1>
+            <p>Editor e simulador de Máquina de Post</p>
+        </div>
+    </header>
+
+
+    <div class="barra-ferramentas">
+
+        <div class="grupo-ferramenta">
+
+            <label for="tipoOperacao">
+                Nova operação
+            </label>
+
+            <select id="tipoOperacao">
+
+                <option value="entrada">
+                    Entrada
+                </option>
+
+                <option value="escrever">
+                    Escrever
+                </option>
+
+                <option value="apagar">
+                    Apagar
+                </option>
+
+                <option value="testar">
+                    Testar
+                </option>
+
+                <option value="parar">
+                    Parar
+                </option>
+
+            </select>
+
+            <button id="btnAdicionar">
+                + Adicionar operação
+            </button>
+
+        </div>
+
+
+        <div class="grupo-ferramenta">
+
+            <button id="btnConectar">
+                🔗 Conectar
+            </button>
+
+            <button id="btnSelecionar">
+                ↖ Selecionar
+            </button>
+
+            <button id="btnExcluir">
+                🗑 Excluir
+            </button>
+
+        </div>
+
+
+        <div class="grupo-ferramenta">
+
+            <button id="btnInicio">
+                ▶ Definir início
+            </button>
+
+            <button id="btnFim">
+                ■ Definir fim
+            </button>
+
+        </div>
+
+
+        <div class="grupo-ferramenta">
+
+            <button id="btnNova">
+                Nova máquina
+            </button>
+
+            <button id="btnExemplo">
+                Carregar exemplo
+            </button>
+
+        </div>
+
+    </div>
+
+
+    <main class="area-principal">
+
+
+        <section class="area-editor">
+
+            <div class="titulo-area">
+
+                <h2>
+                    Máquina
+                </h2>
+
+                <span id="modoAtual">
+                    Modo: Selecionar
+                </span>
+
+            </div>
+
+
+            <div class="canvas-container">
+
+                <canvas id="canvas"></canvas>
+
+            </div>
+
+
+            <div class="instrucoes">
+
+                <strong>Como usar:</strong>
+
+                <span>
+                    Clique em uma operação para selecioná-la.
+                </span>
+
+                <span>
+                    Arraste para movimentá-la.
+                </span>
+
+                <span>
+                    Use "Conectar" para criar uma transição.
+                </span>
+
+            </div>
+
+        </section>
+
+
+        <aside class="painel-lateral">
+
+
+            <section class="painel">
+
+                <h2>Fila</h2>
+
+                <div class="entrada-fila">
+
+                    <input
+                        type="text"
+                        id="entradaFila"
+                        placeholder="Ex.: A B B A"
+                    >
+
+                    <button id="btnDefinirFila">
+                        Definir
+                    </button>
+
+                </div>
+
+
+                <div class="fila-container">
+
+                    <div id="filaVisual">
+                        Fila vazia
+                    </div>
+
+                </div>
+
+            </section>
+
+
+            <section class="painel">
+
+                <h2>Execução</h2>
+
+                <div class="botoes-execucao">
+
+                    <button id="btnExecutar">
+                        ▶ Executar
+                    </button>
+
+                    <button id="btnPasso">
+                        ⏭ Próximo passo
+                    </button>
+
+                    <button id="btnPausar">
+                        ⏸ Pausar
+                    </button>
+
+                    <button id="btnReiniciar">
+                        ↻ Reiniciar
+                    </button>
+
+                </div>
+
+            </section>
+
+
+            <section class="painel">
+
+                <h2>Estado</h2>
+
+                <div class="estado">
+
+                    <p>
+                        <strong>Operação atual:</strong>
+                        <span id="operacaoAtual">
+                            -
+                        </span>
+                    </p>
+
+                    <p>
+                        <strong>Status:</strong>
+                        <span id="statusExecucao">
+                            Parado
+                        </span>
+                    </p>
+
+                    <p>
+                        <strong>Operações:</strong>
+                        <span id="quantidadeOperacoes">
+                            0
+                        </span>
+                    </p>
+
+                </div>
+
+            </section>
+
+
+            <section class="painel">
+
+                <h2>Operação selecionada</h2>
+
+                <div id="informacoesOperacao">
+
+                    <p>
+                        Nenhuma operação selecionada.
+                    </p>
+
+                </div>
+
+            </section>
+
+
+            <section class="painel">
+
+                <h2>Mensagens</h2>
+
+                <div
+                    id="mensagens"
+                    class="mensagens"
+                >
+                    Sistema pronto.
+                </div>
+
+            </section>
+
+        </aside>
+
+    </main>
+
+
+    <footer>
+
+        <p>
+            Simulador de Máquina de Post
+        </p>
+
+    </footer>
+
+
+    <script src="script.js"></script>
+
+</body>
+
+</html>
+```

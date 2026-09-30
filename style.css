@@ -1,0 +1,545 @@
+
+* {
+    box-sizing: border-box;
+}
+
+
+html,
+body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+}
+
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f1f3f5;
+    color: #222;
+
+    display: flex;
+    flex-direction: column;
+
+    overflow: hidden;
+}
+
+
+/* =========================================================
+   CABEÇALHO
+   ========================================================= */
+
+.topo {
+    height: 80px;
+
+    background: #20232a;
+    color: white;
+
+    display: flex;
+    align-items: center;
+
+    padding: 0 25px;
+
+    flex-shrink: 0;
+}
+
+
+.topo h1 {
+    margin: 0;
+
+    font-size: 24px;
+}
+
+
+.topo p {
+    margin: 5px 0 0;
+
+    font-size: 14px;
+
+    color: #cfd3da;
+}
+
+
+/* =========================================================
+   BARRA DE FERRAMENTAS
+   ========================================================= */
+
+.barra-ferramentas {
+
+    min-height: 65px;
+
+    background: white;
+
+    border-bottom: 1px solid #d0d0d0;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 15px;
+
+    padding: 10px 15px;
+
+    flex-wrap: wrap;
+
+    flex-shrink: 0;
+}
+
+
+.grupo-ferramenta {
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 7px;
+
+    padding-right: 15px;
+
+    border-right: 1px solid #ddd;
+}
+
+
+.grupo-ferramenta:last-child {
+    border-right: none;
+}
+
+
+.grupo-ferramenta label {
+    font-size: 14px;
+
+    font-weight: bold;
+}
+
+
+select,
+input {
+
+    border: 1px solid #bbb;
+
+    border-radius: 5px;
+
+    padding: 8px 10px;
+
+    background: white;
+
+    font-size: 14px;
+}
+
+
+button {
+
+    border: 1px solid #aaa;
+
+    border-radius: 5px;
+
+    background: #f8f8f8;
+
+    padding: 8px 12px;
+
+    font-size: 14px;
+
+    cursor: pointer;
+
+    transition:
+        background 0.15s,
+        transform 0.05s;
+}
+
+
+button:hover {
+
+    background: #e9e9e9;
+}
+
+
+button:active {
+
+    transform: translateY(1px);
+}
+
+
+button.ativo {
+
+    background: #dcecff;
+
+    border-color: #3d7dcc;
+
+}
+
+
+/* =========================================================
+   ÁREA PRINCIPAL
+   ========================================================= */
+
+.area-principal {
+
+    flex: 1;
+
+    min-height: 0;
+
+    display: flex;
+
+    overflow: hidden;
+}
+
+
+/* =========================================================
+   EDITOR
+   ========================================================= */
+
+.area-editor {
+
+    flex: 1;
+
+    min-width: 0;
+
+    display: flex;
+
+    flex-direction: column;
+
+    padding: 15px;
+}
+
+
+.titulo-area {
+
+    height: 40px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: space-between;
+
+    flex-shrink: 0;
+}
+
+
+.titulo-area h2 {
+
+    margin: 0;
+
+    font-size: 20px;
+}
+
+
+#modoAtual {
+
+    font-size: 13px;
+
+    background: white;
+
+    border: 1px solid #ccc;
+
+    padding: 6px 10px;
+
+    border-radius: 5px;
+}
+
+
+.canvas-container {
+
+    position: relative;
+
+    flex: 1;
+
+    min-height: 0;
+
+    background: white;
+
+    border: 1px solid #bbb;
+
+    border-radius: 5px;
+
+    overflow: hidden;
+}
+
+
+#canvas {
+
+    display: block;
+
+    width: 100%;
+
+    height: 100%;
+
+    cursor: default;
+}
+
+
+#canvas.modo-conexao {
+
+    cursor: crosshair;
+}
+
+
+.instrucoes {
+
+    min-height: 40px;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 15px;
+
+    font-size: 12px;
+
+    color: #555;
+}
+
+
+/* =========================================================
+   PAINEL LATERAL
+   ========================================================= */
+
+.painel-lateral {
+
+    width: 330px;
+
+    background: #e9ecef;
+
+    border-left: 1px solid #ccc;
+
+    overflow-y: auto;
+
+    padding: 15px;
+}
+
+
+.painel {
+
+    background: white;
+
+    border: 1px solid #ccc;
+
+    border-radius: 6px;
+
+    padding: 15px;
+
+    margin-bottom: 15px;
+}
+
+
+.painel h2 {
+
+    margin: 0 0 12px;
+
+    font-size: 17px;
+
+    border-bottom: 1px solid #eee;
+
+    padding-bottom: 8px;
+}
+
+
+/* =========================================================
+   FILA
+   ========================================================= */
+
+.entrada-fila {
+
+    display: flex;
+
+    gap: 5px;
+}
+
+
+.entrada-fila input {
+
+    flex: 1;
+
+    min-width: 0;
+}
+
+
+.fila-container {
+
+    margin-top: 15px;
+
+    border: 1px solid #ccc;
+
+    min-height: 70px;
+
+    padding: 10px;
+
+    border-radius: 5px;
+
+    background: #fafafa;
+}
+
+
+#filaVisual {
+
+    min-height: 45px;
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 6px;
+
+    flex-wrap: wrap;
+
+    font-family: monospace;
+
+    font-size: 18px;
+}
+
+
+.item-fila {
+
+    min-width: 30px;
+
+    height: 30px;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    background: #e1e1e1;
+
+    border: 1px solid #999;
+
+    border-radius: 4px;
+}
+
+
+/* =========================================================
+   EXECUÇÃO
+   ========================================================= */
+
+.botoes-execucao {
+
+    display: grid;
+
+    grid-template-columns: 1fr 1fr;
+
+    gap: 7px;
+}
+
+
+.botoes-execucao button {
+
+    width: 100%;
+}
+
+
+/* =========================================================
+   ESTADO
+   ========================================================= */
+
+.estado p {
+
+    margin: 8px 0;
+
+    font-size: 14px;
+}
+
+
+#statusExecucao {
+
+    font-weight: bold;
+}
+
+
+/* =========================================================
+   INFORMAÇÕES DA OPERAÇÃO
+   ========================================================= */
+
+#informacoesOperacao p {
+
+    margin: 6px 0;
+
+    font-size: 14px;
+}
+
+
+#informacoesOperacao strong {
+
+    display: inline-block;
+
+    min-width: 70px;
+}
+
+
+/* =========================================================
+   MENSAGENS
+   ========================================================= */
+
+.mensagens {
+
+    min-height: 60px;
+
+    background: #f8f8f8;
+
+    border: 1px solid #ddd;
+
+    border-radius: 4px;
+
+    padding: 10px;
+
+    font-size: 13px;
+
+    line-height: 1.4;
+}
+
+
+/* =========================================================
+   RODAPÉ
+   ========================================================= */
+
+footer {
+
+    height: 30px;
+
+    background: #20232a;
+
+    color: #bbb;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    font-size: 11px;
+
+    flex-shrink: 0;
+}
+
+
+/* =========================================================
+   RESPONSIVIDADE
+   ========================================================= */
+
+@media (max-width: 900px) {
+
+    body {
+        overflow: auto;
+    }
+
+    .area-principal {
+        flex-direction: column;
+        overflow: visible;
+    }
+
+    .area-editor {
+        height: 600px;
+    }
+
+    .painel-lateral {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid #ccc;
+    }
+
+    .barra-ferramentas {
+        overflow: visible;
+    }
+
+}
+
