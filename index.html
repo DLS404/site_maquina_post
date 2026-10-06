@@ -1,293 +1,154 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Simulador de Máquina de Post</title>
-
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <header class="topo">
-        <div>
-            <h1>Simulador de Máquina de Post</h1>
-            <p>Editor e simulador de Máquina de Post</p>
-        </div>
-    </header>
+<header>
+    <h1>Simulador de Máquina de Post</h1>
+    <p>Crie, conecte e execute uma Máquina de Post.</p>
+</header>
 
+<div class="toolbar">
 
-    <div class="barra-ferramentas">
-
-        <div class="grupo-ferramenta">
-
-            <label for="tipoOperacao">
-                Nova operação
-            </label>
-
-            <select id="tipoOperacao">
-
-                <option value="entrada">
-                    Entrada
-                </option>
-
-                <option value="escrever">
-                    Escrever
-                </option>
-
-                <option value="apagar">
-                    Apagar
-                </option>
-
-                <option value="testar">
-                    Testar
-                </option>
-
-                <option value="parar">
-                    Parar
-                </option>
-
-            </select>
-
-            <button id="btnAdicionar">
-                + Adicionar operação
-            </button>
-
-        </div>
-
-
-        <div class="grupo-ferramenta">
-
-            <button id="btnConectar">
-                🔗 Conectar
-            </button>
-
-            <button id="btnSelecionar">
-                ↖ Selecionar
-            </button>
-
-            <button id="btnExcluir">
-                🗑 Excluir
-            </button>
-
-        </div>
-
-
-        <div class="grupo-ferramenta">
-
-            <button id="btnInicio">
-                ▶ Definir início
-            </button>
-
-            <button id="btnFim">
-                ■ Definir fim
-            </button>
-
-        </div>
-
-
-        <div class="grupo-ferramenta">
-
-            <button id="btnNova">
-                Nova máquina
-            </button>
-
-            <button id="btnExemplo">
-                Carregar exemplo
-            </button>
-
-        </div>
-
+    <div class="tool-group">
+        <button onclick="addNode('partida')">＋ Partida</button>
+        <button onclick="addNode('teste')">＋ Teste</button>
+        <button onclick="addNode('atribuicao')">＋ Atribuição</button>
+        <button onclick="addNode('aceita')">＋ Aceita</button>
+        <button onclick="addNode('rejeita')">＋ Rejeita</button>
     </div>
 
+    <div class="tool-group">
+        <button onclick="startConnectionMode()">🔗 Conectar</button>
+        <button onclick="deleteSelected()">🗑 Excluir</button>
+        <button onclick="newMachine()">📄 Nova máquina</button>
+        <button onclick="loadExample()">💡 Exemplo</button>
+    </div>
 
-    <main class="area-principal">
+</div>
 
+<main>
 
-        <section class="area-editor">
+    <section class="editor">
 
-            <div class="titulo-area">
+        <div class="editor-title">
+            <strong>Área de construção</strong>
+            <span id="modeText">Modo: seleção</span>
+        </div>
 
-                <h2>
-                    Máquina
-                </h2>
+        <div id="canvas">
 
-                <span id="modoAtual">
-                    Modo: Selecionar
-                </span>
+            <svg id="connections">
+                <defs>
+                    <marker
+                        id="arrow"
+                        markerWidth="10"
+                        markerHeight="10"
+                        refX="9"
+                        refY="3"
+                        orient="auto"
+                        markerUnits="strokeWidth">
 
-            </div>
+                        <path d="M0,0 L0,6 L9,3 z"></path>
 
+                    </marker>
+                </defs>
+            </svg>
 
-            <div class="canvas-container">
+            <div id="nodes"></div>
 
-                <canvas id="canvas"></canvas>
+        </div>
 
-            </div>
+    </section>
 
+    <aside>
 
-            <div class="instrucoes">
+        <section class="panel">
 
-                <strong>Como usar:</strong>
+            <h2>Propriedades</h2>
 
-                <span>
-                    Clique em uma operação para selecioná-la.
-                </span>
-
-                <span>
-                    Arraste para movimentá-la.
-                </span>
-
-                <span>
-                    Use "Conectar" para criar uma transição.
-                </span>
-
+            <div id="properties">
+                <p class="empty">
+                    Selecione uma operação ou conexão.
+                </p>
             </div>
 
         </section>
 
+        <section class="panel">
 
-        <aside class="painel-lateral">
+            <h2>Fila</h2>
 
+            <div class="queue-input">
 
-            <section class="painel">
+                <input
+                    type="text"
+                    id="inputWord"
+                    placeholder="Ex.: 0101">
 
-                <h2>Fila</h2>
+                <button onclick="setInputWord()">Definir</button>
 
-                <div class="entrada-fila">
+            </div>
 
-                    <input
-                        type="text"
-                        id="entradaFila"
-                        placeholder="Ex.: A B B A"
-                    >
+            <div id="queue" class="queue">
+                ε
+            </div>
 
-                    <button id="btnDefinirFila">
-                        Definir
-                    </button>
+        </section>
 
-                </div>
+        <section class="panel">
 
+            <h2>Execução</h2>
 
-                <div class="fila-container">
+            <div class="execution-buttons">
 
-                    <div id="filaVisual">
-                        Fila vazia
-                    </div>
+                <button onclick="executeMachine()">
+                    ▶ Executar
+                </button>
 
-                </div>
+                <button onclick="stepMachine()">
+                    ⏭ Passo
+                </button>
 
-            </section>
+                <button onclick="pauseMachine()">
+                    ⏸ Pausar
+                </button>
 
+                <button onclick="resetExecution()">
+                    ↺ Resetar
+                </button>
 
-            <section class="painel">
+            </div>
 
-                <h2>Execução</h2>
+            <div id="executionStatus" class="status">
+                Máquina parada.
+            </div>
 
-                <div class="botoes-execucao">
+        </section>
 
-                    <button id="btnExecutar">
-                        ▶ Executar
-                    </button>
+        <section class="panel">
 
-                    <button id="btnPasso">
-                        ⏭ Próximo passo
-                    </button>
+            <h2>Validação</h2>
 
-                    <button id="btnPausar">
-                        ⏸ Pausar
-                    </button>
+            <button onclick="validateMachine()" class="validate">
+                ✓ Validar máquina
+            </button>
 
-                    <button id="btnReiniciar">
-                        ↻ Reiniciar
-                    </button>
+            <div id="validationResult"></div>
 
-                </div>
+        </section>
 
-            </section>
+    </aside>
 
+</main>
 
-            <section class="painel">
-
-                <h2>Estado</h2>
-
-                <div class="estado">
-
-                    <p>
-                        <strong>Operação atual:</strong>
-                        <span id="operacaoAtual">
-                            -
-                        </span>
-                    </p>
-
-                    <p>
-                        <strong>Status:</strong>
-                        <span id="statusExecucao">
-                            Parado
-                        </span>
-                    </p>
-
-                    <p>
-                        <strong>Operações:</strong>
-                        <span id="quantidadeOperacoes">
-                            0
-                        </span>
-                    </p>
-
-                </div>
-
-            </section>
-
-
-            <section class="painel">
-
-                <h2>Operação selecionada</h2>
-
-                <div id="informacoesOperacao">
-
-                    <p>
-                        Nenhuma operação selecionada.
-                    </p>
-
-                </div>
-
-            </section>
-
-
-            <section class="painel">
-
-                <h2>Mensagens</h2>
-
-                <div
-                    id="mensagens"
-                    class="mensagens"
-                >
-                    Sistema pronto.
-                </div>
-
-            </section>
-
-        </aside>
-
-    </main>
-
-
-    <footer>
-
-        <p>
-            Simulador de Máquina de Post
-        </p>
-
-    </footer>
-
-
-    <script src="script.js"></script>
+<script src="script.js"></script>
 
 </body>
-
 </html>
-```

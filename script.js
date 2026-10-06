@@ -1,674 +1,320 @@
-
 /* =========================================================
-   ELEMENTOS HTML
+   SIMULADOR DE MÁQUINA DE POST
+   Versão simplificada:
+   - Uma máquina por vez
+   - Sem zoom
+   - Sem pan
+   - Nós arrastáveis
+   - Conexões editáveis
    ========================================================= */
-
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-const tipoOperacao =
-    document.getElementById("tipoOperacao");
-
-const btnAdicionar =
-    document.getElementById("btnAdicionar");
-
-const btnConectar =
-    document.getElementById("btnConectar");
-
-const btnSelecionar =
-    document.getElementById("btnSelecionar");
-
-const btnExcluir =
-    document.getElementById("btnExcluir");
-
-const btnInicio =
-    document.getElementById("btnInicio");
-
-const btnFim =
-    document.getElementById("btnFim");
-
-const btnNova =
-    document.getElementById("btnNova");
-
-const btnExemplo =
-    document.getElementById("btnExemplo");
-
-const btnExecutar =
-    document.getElementById("btnExecutar");
-
-const btnPasso =
-    document.getElementById("btnPasso");
-
-const btnPausar =
-    document.getElementById("btnPausar");
-
-const btnReiniciar =
-    document.getElementById("btnReiniciar");
-
-const entradaFila =
-    document.getElementById("entradaFila");
-
-const btnDefinirFila =
-    document.getElementById("btnDefinirFila");
-
-const filaVisual =
-    document.getElementById("filaVisual");
-
-const operacaoAtualHTML =
-    document.getElementById("operacaoAtual");
-
-const statusExecucaoHTML =
-    document.getElementById("statusExecucao");
-
-const quantidadeOperacoesHTML =
-    document.getElementById("quantidadeOperacoes");
-
-const informacoesOperacao =
-    document.getElementById("informacoesOperacao");
-
-const mensagens =
-    document.getElementById("mensagens");
-
-const modoAtualHTML =
-    document.getElementById("modoAtual");
 
 
 /* =========================================================
-   CONFIGURAÇÕES VISUAIS
+   ESTADO DA MÁQUINA
    ========================================================= */
 
-const LARGURA_OPERACAO = 150;
-const ALTURA_OPERACAO = 70;
+const machine = {
 
-const RAIO_PONTA_SETA = 7;
+    nodes: [],
+    edges: [],
 
+    nextNodeId: 1,
+    nextEdgeId: 1,
 
-/* =========================================================
-   MODELO DA MÁQUINA
-   ========================================================= */
+    selectedNode: null,
+    selectedEdge: null,
 
-const maquina = {
+    connectionMode: false,
+    connectionStart: null,
 
-    operacoes: [],
+    inputWord: "",
+    queue: [],
 
-    inicio: null,
+    currentNode: null,
 
-    fim: null
+    running: false,
+    paused: false,
+
+    timer: null
 
 };
 
 
 /* =========================================================
-   ESTADO DO EDITOR
+   ELEMENTOS
    ========================================================= */
 
-let proximoId = 1;
+const canvas = document.getElementById("canvas");
+const nodesContainer = document.getElementById("nodes");
+const svg = document.getElementById("connections");
 
-let modo = "selecionar";
+const properties = document.getElementById("properties");
+const queueElement = document.getElementById("queue");
 
-let operacaoSelecionada = null;
+const executionStatus =
+    document.getElementById("executionStatus");
 
-let operacaoArrastada = null;
+const validationResult =
+    document.getElementById("validationResult");
 
-let deslocamentoX = 0;
-
-let deslocamentoY = 0;
-
-let origemConexao = null;
+const modeText =
+    document.getElementById("modeText");
 
 
 /* =========================================================
-   ESTADO DA SIMULAÇÃO
+   TIPOS DE NÓ
    ========================================================= */
 
-let fila = [];
+const nodeNames = {
 
-let filaInicial = [];
+    partida: "Partida",
 
-let operacaoAtual = null;
+    teste: "X ← ler(X)",
 
-let executando = false;
+    atribuicao: "X ← Xs",
 
-let intervaloExecucao = null;
+    aceita: "ACEITA",
+
+    rejeita: "REJEITA"
+
+};
 
 
 /* =========================================================
-   AJUSTE DO CANVAS
+   ADICIONAR NÓ
    ========================================================= */
 
-function ajustarCanvas() {
+function addNode(type, x = 100, y = 100) {
 
-    const rect =
-        canvas.getBoundingClientRect();
+    const node = {
 
-    const dpr =
-        window.devicePixelRatio || 1;
+        id: machine.nextNodeId++,
 
-    canvas.width =
-        Math.round(rect.width * dpr);
+        type,
 
-    canvas.height =
-        Math.round(rect.height * dpr);
+        x,
+        y,
 
-    ctx.setTransform(
-        dpr,
-        0,
-        0,
-        dpr,
-        0,
-        0
-    );
+        symbol: "#",
 
-    desenhar();
-}
-
-
-window.addEventListener(
-    "resize",
-    ajustarCanvas
-);
-
-
-/* =========================================================
-   UTILITÁRIOS DO CANVAS
-   ========================================================= */
-
-function obterPosicaoMouse(event) {
-
-    const rect =
-        canvas.getBoundingClientRect();
-
-    return {
-
-        x: event.clientX - rect.left,
-
-        y: event.clientY - rect.top
+        name: nodeNames[type]
 
     };
+
+    machine.nodes.push(node);
+
+    render();
+
+    selectNode(node.id);
 }
 
 
-function obterOperacaoNaPosicao(x, y) {
+/* =========================================================
+   RENDERIZAÇÃO
+   ========================================================= */
 
-    for (
-        let i = maquina.operacoes.length - 1;
-        i >= 0;
-        i--
-    ) {
+function render() {
 
-        const operacao =
-            maquina.operacoes[i];
+    renderNodes();
+    renderEdges();
 
-        if (
+}
 
-            x >= operacao.x &&
 
-            x <=
-                operacao.x +
-                LARGURA_OPERACAO &&
+/* =========================================================
+   RENDERIZAR NÓS
+   ========================================================= */
 
-            y >= operacao.y &&
+function renderNodes() {
 
-            y <=
-                operacao.y +
-                ALTURA_OPERACAO
+    nodesContainer.innerHTML = "";
 
-        ) {
+    machine.nodes.forEach(node => {
 
-            return operacao;
+        const element = document.createElement("div");
+
+        element.className =
+            `node ${node.type}`;
+
+        if (machine.selectedNode === node.id) {
+            element.classList.add("selected");
+        }
+
+        if (machine.currentNode === node.id) {
+            element.classList.add("current");
+        }
+
+        element.dataset.id = node.id;
+
+        element.style.left = node.x + "px";
+        element.style.top = node.y + "px";
+
+        element.textContent = getNodeLabel(node);
+
+        nodesContainer.appendChild(element);
+
+        setupNodeDragging(element, node);
+
+    });
+
+}
+
+
+/* =========================================================
+   TEXTO DO NÓ
+   ========================================================= */
+
+function getNodeLabel(node) {
+
+    switch (node.type) {
+
+        case "partida":
+            return "PARTIDA";
+
+        case "teste":
+            return "X ← ler(X)";
+
+        case "atribuicao":
+            return `X ← X${node.symbol}`;
+
+        case "aceita":
+            return "ACEITA";
+
+        case "rejeita":
+            return "REJEITA";
+
+        default:
+            return "";
+
+    }
+
+}
+
+
+/* =========================================================
+   ARRASTAR NÓ
+   ========================================================= */
+
+function setupNodeDragging(element, node) {
+
+    let dragging = false;
+
+    let offsetX = 0;
+    let offsetY = 0;
+
+    element.addEventListener("mousedown", event => {
+
+        if (machine.connectionMode) {
+
+            event.stopPropagation();
+
+            handleConnectionClick(node);
+
+            return;
 
         }
 
-    }
-
-    return null;
-}
-
-
-/* =========================================================
-   CRIAÇÃO DE OPERAÇÕES
-   ========================================================= */
-
-function criarOperacao(x, y, tipo) {
-
-    const operacao = {
-
-        id: proximoId++,
-
-        tipo: tipo,
-
-        x: x - LARGURA_OPERACAO / 2,
-
-        y: y - ALTURA_OPERACAO / 2,
-
-        transicoes: []
-
-    };
-
-
-    maquina.operacoes.push(
-        operacao
-    );
-
-
-    atualizarInterface();
-
-    desenhar();
-
-    mostrarMensagem(
-        `Operação ${operacao.id} criada.`
-    );
-
-    return operacao;
-}
-
-
-/* =========================================================
-   NOME DOS TIPOS
-   ========================================================= */
-
-function nomeTipo(tipo) {
-
-    const nomes = {
-
-        entrada: "Entrada",
-
-        escrever: "Escrever",
-
-        apagar: "Apagar",
-
-        testar: "Testar",
-
-        parar: "Parar"
-
-    };
-
-
-    return nomes[tipo] || tipo;
-}
-
-
-/* =========================================================
-   DESENHO DA MÁQUINA
-   ========================================================= */
-
-function desenhar() {
-
-    const largura =
-        canvas.clientWidth;
-
-    const altura =
-        canvas.clientHeight;
-
-
-    ctx.clearRect(
-        0,
-        0,
-        largura,
-        altura
-    );
-
-
-    desenharGrade(
-        largura,
-        altura
-    );
-
-
-    /*
-     * Primeiro desenhamos as conexões.
-     * Assim elas ficam atrás das operações.
-     */
-
-    for (
-        const origem
-        of maquina.operacoes
-    ) {
-
-        for (
-            const destinoId
-            of origem.transicoes
-        ) {
-
-            const destino =
-                maquina.operacoes.find(
-                    operacao =>
-                        operacao.id === destinoId
-                );
-
-
-            if (destino) {
-
-                desenharConexao(
-                    origem,
-                    destino
-                );
-
-            }
-
+        if (event.button !== 0) {
+            return;
         }
 
-    }
+        dragging = true;
+
+        const rect =
+            canvas.getBoundingClientRect();
+
+        offsetX =
+            event.clientX -
+            rect.left -
+            node.x;
+
+        offsetY =
+            event.clientY -
+            rect.top -
+            node.y;
+
+        selectNode(node.id);
+
+        event.preventDefault();
+
+    });
 
 
-    /*
-     * Depois desenhamos as operações.
-     */
+    document.addEventListener("mousemove", event => {
 
-    for (
-        const operacao
-        of maquina.operacoes
-    ) {
+        if (!dragging) {
+            return;
+        }
 
-        desenharOperacao(
-            operacao
-        );
+        const rect =
+            canvas.getBoundingClientRect();
 
-    }
+        node.x =
+            event.clientX -
+            rect.left -
+            offsetX;
 
+        node.y =
+            event.clientY -
+            rect.top -
+            offsetY;
 
-    /*
-     * Se estivermos criando uma conexão,
-     * desenhamos uma linha temporária.
-     */
+        node.x =
+            Math.max(5, Math.min(
+                canvas.clientWidth - 140,
+                node.x
+            ));
 
-    if (origemConexao) {
+        node.y =
+            Math.max(5, Math.min(
+                canvas.clientHeight - 70,
+                node.y
+            ));
 
-        desenharConexaoTemporaria();
+        render();
 
-    }
-
-}
-
-
-/* =========================================================
-   GRADE
-   ========================================================= */
-
-function desenharGrade(
-    largura,
-    altura
-) {
-
-    const tamanho = 25;
-
-    ctx.save();
-
-    ctx.strokeStyle = "#eeeeee";
-
-    ctx.lineWidth = 1;
+    });
 
 
-    for (
-        let x = 0;
-        x < largura;
-        x += tamanho
-    ) {
+    document.addEventListener("mouseup", () => {
 
-        ctx.beginPath();
+        dragging = false;
 
-        ctx.moveTo(x, 0);
-
-        ctx.lineTo(x, altura);
-
-        ctx.stroke();
-
-    }
-
-
-    for (
-        let y = 0;
-        y < altura;
-        y += tamanho
-    ) {
-
-        ctx.beginPath();
-
-        ctx.moveTo(0, y);
-
-        ctx.lineTo(largura, y);
-
-        ctx.stroke();
-
-    }
-
-
-    ctx.restore();
+    });
 
 }
 
 
 /* =========================================================
-   DESENHAR OPERAÇÃO
+   SELECIONAR NÓ
    ========================================================= */
 
-function desenharOperacao(
-    operacao
-) {
+function selectNode(id) {
 
-    let preenchimento =
-        "#ffffff";
+    machine.selectedNode = id;
 
+    machine.selectedEdge = null;
 
-    let borda =
-        "#333333";
+    showNodeProperties();
 
+    render();
 
-    let espessura =
-        2;
+}
 
 
-    /*
-     * Operação selecionada
-     */
+/* =========================================================
+   SELECIONAR CONEXÃO
+   ========================================================= */
 
-    if (
-        operacao ===
-        operacaoSelecionada
-    ) {
+function selectEdge(id) {
 
-        preenchimento =
-            "#e7f1ff";
+    machine.selectedEdge = id;
 
-        borda =
-            "#2878d0";
+    machine.selectedNode = null;
 
-        espessura =
-            3;
+    showEdgeProperties();
 
-    }
-
-
-    /*
-     * Operação atual
-     */
-
-    if (
-        operacao ===
-        operacaoAtual
-    ) {
-
-        preenchimento =
-            "#fff2b8";
-
-        borda =
-            "#d69e00";
-
-        espessura =
-            4;
-
-    }
-
-
-    /*
-     * Início
-     */
-
-    if (
-        maquina.inicio ===
-        operacao.id
-    ) {
-
-        borda =
-            "#238636";
-
-        espessura =
-            4;
-
-    }
-
-
-    /*
-     * Fim
-     */
-
-    if (
-        maquina.fim ===
-        operacao.id
-    ) {
-
-        borda =
-            "#b42318";
-
-        espessura =
-            4;
-
-    }
-
-
-    ctx.save();
-
-
-    ctx.beginPath();
-
-    ctx.roundRect(
-
-        operacao.x,
-
-        operacao.y,
-
-        LARGURA_OPERACAO,
-
-        ALTURA_OPERACAO,
-
-        8
-
-    );
-
-
-    ctx.fillStyle =
-        preenchimento;
-
-    ctx.fill();
-
-
-    ctx.strokeStyle =
-        borda;
-
-    ctx.lineWidth =
-        espessura;
-
-    ctx.stroke();
-
-
-    /*
-     * Identificador
-     */
-
-    ctx.fillStyle =
-        "#222";
-
-    ctx.font =
-        "bold 15px Arial";
-
-    ctx.fillText(
-
-        `#${operacao.id}`,
-
-        operacao.x + 10,
-
-        operacao.y + 22
-
-    );
-
-
-    /*
-     * Nome da operação
-     */
-
-    ctx.font =
-        "14px Arial";
-
-    ctx.fillText(
-
-        nomeTipo(
-            operacao.tipo
-        ),
-
-        operacao.x + 10,
-
-        operacao.y + 47
-
-    );
-
-
-    /*
-     * Indicador de início
-     */
-
-    if (
-        maquina.inicio ===
-        operacao.id
-    ) {
-
-        ctx.font =
-            "bold 11px Arial";
-
-        ctx.fillStyle =
-            "#238636";
-
-        ctx.fillText(
-
-            "INÍCIO",
-
-            operacao.x + 90,
-
-            operacao.y + 20
-
-        );
-
-    }
-
-
-    /*
-     * Indicador de fim
-     */
-
-    if (
-        maquina.fim ===
-        operacao.id
-    ) {
-
-        ctx.font =
-            "bold 11px Arial";
-
-        ctx.fillStyle =
-            "#b42318";
-
-        ctx.fillText(
-
-            "FIM",
-
-            operacao.x + 110,
-
-            operacao.y + 20
-
-        );
-
-    }
-
-
-    ctx.restore();
+    render();
 
 }
 
@@ -677,913 +323,610 @@ function desenharOperacao(
    CONEXÕES
    ========================================================= */
 
-function obterCentro(
-    operacao
-) {
+function startConnectionMode() {
 
-    return {
+    machine.connectionMode =
+        !machine.connectionMode;
 
-        x:
-            operacao.x +
-            LARGURA_OPERACAO / 2,
+    machine.connectionStart = null;
 
-        y:
-            operacao.y +
-            ALTURA_OPERACAO / 2
+    if (machine.connectionMode) {
+
+        modeText.textContent =
+            "Modo: conectando... clique em dois nós";
+
+        modeText.classList.add("connection-mode");
+
+    } else {
+
+        modeText.textContent =
+            "Modo: seleção";
+
+        modeText.classList.remove("connection-mode");
+
+    }
+
+}
+
+
+/* =========================================================
+   CLIQUE PARA CONECTAR
+   ========================================================= */
+
+function handleConnectionClick(node) {
+
+    if (!machine.connectionStart) {
+
+        machine.connectionStart =
+            node.id;
+
+        modeText.textContent =
+            "Agora clique no nó de destino.";
+
+        return;
+
+    }
+
+    if (machine.connectionStart === node.id) {
+
+        machine.connectionStart = null;
+
+        modeText.textContent =
+            "Escolha outro nó.";
+
+        return;
+
+    }
+
+    createEdge(
+        machine.connectionStart,
+        node.id
+    );
+
+    machine.connectionStart = null;
+
+    modeText.textContent =
+        "Conexão criada. Clique em outros nós.";
+
+}
+
+
+/* =========================================================
+   CRIAR CONEXÃO
+   ========================================================= */
+
+function createEdge(from, to) {
+
+    const source =
+        machine.nodes.find(n => n.id === from);
+
+    const target =
+        machine.nodes.find(n => n.id === to);
+
+    const edge = {
+
+        id: machine.nextEdgeId++,
+
+        from,
+        to,
+
+        label:
+            source.type === "teste"
+                ? "ε"
+                : "",
+
+        bendX:
+            (source.x + target.x) / 2,
+
+        bendY:
+            (source.y + target.y) / 2 - 50
 
     };
 
-}
+    machine.edges.push(edge);
 
-
-function desenharConexao(
-    origem,
-    destino
-) {
-
-    const pontoOrigem =
-        obterCentro(origem);
-
-    const pontoDestino =
-        obterCentro(destino);
-
-
-    /*
-     * Calcula a direção da linha.
-     */
-
-    const dx =
-        pontoDestino.x -
-        pontoOrigem.x;
-
-    const dy =
-        pontoDestino.y -
-        pontoOrigem.y;
-
-
-    const distancia =
-        Math.sqrt(
-            dx * dx +
-            dy * dy
-        );
-
-
-    if (distancia === 0) {
-        return;
-    }
-
-
-    const ux =
-        dx / distancia;
-
-    const uy =
-        dy / distancia;
-
-
-    /*
-     * Começa e termina próximo às caixas.
-     */
-
-    const inicioX =
-        pontoOrigem.x +
-        ux * 35;
-
-    const inicioY =
-        pontoOrigem.y +
-        uy * 25;
-
-
-    const fimX =
-        pontoDestino.x -
-        ux * 35;
-
-    const fimY =
-        pontoDestino.y -
-        uy * 25;
-
-
-    ctx.save();
-
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-        inicioX,
-        inicioY
-    );
-
-    ctx.lineTo(
-        fimX,
-        fimY
-    );
-
-
-    ctx.strokeStyle =
-        "#555";
-
-    ctx.lineWidth =
-        2;
-
-    ctx.stroke();
-
-
-    /*
-     * Desenha a ponta da seta.
-     */
-
-    const angulo =
-        Math.atan2(
-            fimY - inicioY,
-            fimX - inicioX
-        );
-
-
-    ctx.beginPath();
-
-    ctx.moveTo(
-        fimX,
-        fimY
-    );
-
-    ctx.lineTo(
-
-        fimX -
-        RAIO_PONTA_SETA *
-        Math.cos(
-            angulo - Math.PI / 6
-        ),
-
-        fimY -
-        RAIO_PONTA_SETA *
-        Math.sin(
-            angulo - Math.PI / 6
-        )
-
-    );
-
-
-    ctx.lineTo(
-
-        fimX -
-        RAIO_PONTA_SETA *
-        Math.cos(
-            angulo + Math.PI / 6
-        ),
-
-        fimY -
-        RAIO_PONTA_SETA *
-        Math.sin(
-            angulo + Math.PI / 6
-        )
-
-    );
-
-
-    ctx.closePath();
-
-
-    ctx.fillStyle =
-        "#555";
-
-    ctx.fill();
-
-
-    ctx.restore();
+    selectEdge(edge.id);
 
 }
 
 
 /* =========================================================
-   CONEXÃO TEMPORÁRIA
+   RENDERIZAR CONEXÕES
    ========================================================= */
 
-let ultimaPosicaoMouse = {
-    x: 0,
-    y: 0
-};
+function renderEdges() {
+
+    svg.querySelectorAll(".edge-element")
+        .forEach(el => el.remove());
+
+    machine.edges.forEach(edge => {
+
+        const source =
+            machine.nodes.find(
+                n => n.id === edge.from
+            );
+
+        const target =
+            machine.nodes.find(
+                n => n.id === edge.to
+            );
+
+        if (!source || !target) {
+            return;
+        }
+
+        const sx =
+            source.x + 65;
+
+        const sy =
+            source.y + 30;
+
+        const tx =
+            target.x + 65;
+
+        const ty =
+            target.y + 30;
+
+        const cx =
+            edge.bendX;
+
+        const cy =
+            edge.bendY;
 
 
-function desenharConexaoTemporaria() {
+        const path =
+            document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "path"
+            );
 
-    const centro =
-        obterCentro(
-            origemConexao
+        path.classList.add(
+            "edge-element",
+            "edge"
+        );
+
+        if (machine.selectedEdge === edge.id) {
+            path.classList.add("selected");
+        }
+
+        const d =
+            `M ${sx} ${sy}
+             Q ${cx} ${cy}
+               ${tx} ${ty}`;
+
+        path.setAttribute("d", d);
+
+        path.addEventListener(
+            "click",
+            event => {
+
+                event.stopPropagation();
+
+                selectEdge(edge.id);
+
+            }
         );
 
 
-    ctx.save();
+        svg.appendChild(path);
 
 
-    ctx.beginPath();
+        /* LABEL */
 
-    ctx.moveTo(
-        centro.x,
-        centro.y
-    );
+        if (edge.label) {
 
-    ctx.lineTo(
-        ultimaPosicaoMouse.x,
-        ultimaPosicaoMouse.y
-    );
+            const label =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "text"
+                );
+
+            label.classList.add(
+                "edge-element",
+                "edge-label"
+            );
+
+            label.setAttribute(
+                "x",
+                cx
+            );
+
+            label.setAttribute(
+                "y",
+                cy - 8
+            );
+
+            label.setAttribute(
+                "text-anchor",
+                "middle"
+            );
+
+            label.textContent =
+                edge.label;
+
+            svg.appendChild(label);
+
+        }
 
 
-    ctx.strokeStyle =
-        "#2878d0";
+        /* HANDLE DA CURVA */
 
-    ctx.lineWidth =
-        2;
+        if (machine.selectedEdge === edge.id) {
 
-    ctx.setLineDash([
-        6,
-        6
-    ]);
+            const handle =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "circle"
+                );
 
-    ctx.stroke();
+            handle.classList.add(
+                "edge-element",
+                "edge-handle"
+            );
 
-    ctx.restore();
+            handle.setAttribute(
+                "cx",
+                cx
+            );
+
+            handle.setAttribute(
+                "cy",
+                cy
+            );
+
+            handle.setAttribute(
+                "r",
+                7
+            );
+
+            setupEdgeHandle(
+                handle,
+                edge
+            );
+
+            svg.appendChild(handle);
+
+        }
+
+    });
 
 }
 
 
 /* =========================================================
-   EVENTOS DO MOUSE
+   MOVER CURVA DA CONEXÃO
    ========================================================= */
 
-canvas.addEventListener(
-    "mousedown",
-    function (event) {
+function setupEdgeHandle(handle, edge) {
 
-        const posicao =
-            obterPosicaoMouse(
-                event
-            );
+    let dragging = false;
 
+    handle.addEventListener(
+        "mousedown",
+        event => {
 
-        ultimaPosicaoMouse =
-            posicao;
+            dragging = true;
 
+            event.stopPropagation();
 
-        const operacao =
-            obterOperacaoNaPosicao(
-                posicao.x,
-                posicao.y
-            );
+            event.preventDefault();
+
+        }
+    );
 
 
-        /*
-         * MODO CONEXÃO
-         */
+    document.addEventListener(
+        "mousemove",
+        event => {
 
-        if (
-            modo ===
-            "conectar"
-        ) {
-
-            if (!operacao) {
+            if (!dragging) {
                 return;
             }
 
+            const rect =
+                canvas.getBoundingClientRect();
+
+            edge.bendX =
+                event.clientX -
+                rect.left;
+
+            edge.bendY =
+                event.clientY -
+                rect.top;
+
+            renderEdges();
+
+        }
+    );
+
+
+    document.addEventListener(
+        "mouseup",
+        () => {
+
+            dragging = false;
+
+        }
+    );
+
+}
+
+
+/* =========================================================
+   PROPRIEDADES DO NÓ
+   ========================================================= */
+
+function showNodeProperties() {
+
+    const node =
+        machine.nodes.find(
+            n => n.id === machine.selectedNode
+        );
+
+    if (!node) {
+
+        properties.innerHTML =
+            `<p class="empty">
+                Selecione uma operação ou conexão.
+             </p>`;
+
+        return;
+
+    }
+
+
+    let html = `
+
+        <div class="property">
+
+            <label>Tipo</label>
+
+            <input
+                value="${nodeNames[node.type]}"
+                disabled>
+
+        </div>
+
+    `;
+
+
+    if (node.type === "atribuicao") {
+
+        html += `
+
+            <div class="property">
+
+                <label>Símbolo a adicionar</label>
+
+                <select id="nodeSymbol">
+
+                    <option value="#">#</option>
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="a">a</option>
+                    <option value="b">b</option>
+
+                </select>
+
+            </div>
+
+        `;
+
+    }
+
+
+    properties.innerHTML = html;
+
+
+    if (node.type === "atribuicao") {
+
+        const select =
+            document.getElementById(
+                "nodeSymbol"
+            );
+
+        select.value = node.symbol;
+
+        select.addEventListener(
+            "change",
+            () => {
+
+                node.symbol =
+                    select.value;
+
+                render();
+
+            }
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   PROPRIEDADES DA CONEXÃO
+   ========================================================= */
+
+function showEdgeProperties() {
+
+    const edge =
+        machine.edges.find(
+            e => e.id === machine.selectedEdge
+        );
+
+    if (!edge) {
+
+        properties.innerHTML =
+            `<p class="empty">
+                Selecione uma operação ou conexão.
+             </p>`;
+
+        return;
+
+    }
+
+
+    properties.innerHTML = `
+
+        <div class="property">
+
+            <label>Rótulo da conexão</label>
+
+            <input
+                id="edgeLabel"
+                value="${edge.label}"
+                placeholder="Ex.: 0, 1 ou ε">
+
+        </div>
+
+        <button
+            onclick="deleteSelectedEdge()"
+            style="width:100%;">
+
+            Excluir conexão
+
+        </button>
+
+    `;
+
+
+    document
+        .getElementById("edgeLabel")
+        .addEventListener(
+            "input",
+            event => {
+
+                edge.label =
+                    event.target.value;
+
+                renderEdges();
+
+            }
+        );
+
+}
+
+
+/* =========================================================
+   EXCLUIR SELECIONADO
+   ========================================================= */
+
+function deleteSelected() {
+
+    if (machine.selectedNode !== null) {
+
+        const id =
+            machine.selectedNode;
+
+        machine.nodes =
+            machine.nodes.filter(
+                n => n.id !== id
+            );
+
+        machine.edges =
+            machine.edges.filter(
+                e =>
+                    e.from !== id &&
+                    e.to !== id
+            );
+
+        machine.selectedNode = null;
+
+        properties.innerHTML =
+            `<p class="empty">
+                Selecione uma operação ou conexão.
+             </p>`;
+
+        render();
+
+        return;
+
+    }
+
+
+    if (machine.selectedEdge !== null) {
+
+        deleteSelectedEdge();
+
+    }
+
+}
+
+
+/* =========================================================
+   EXCLUIR CONEXÃO
+   ========================================================= */
+
+function deleteSelectedEdge() {
+
+    if (machine.selectedEdge === null) {
+        return;
+    }
+
+    machine.edges =
+        machine.edges.filter(
+            e => e.id !== machine.selectedEdge
+        );
+
+    machine.selectedEdge = null;
+
+    properties.innerHTML =
+        `<p class="empty">
+            Selecione uma operação ou conexão.
+         </p>`;
+
+    render();
+
+}
+
+
+/* =========================================================
+   TECLA DELETE
+   ========================================================= */
+
+document.addEventListener(
+    "keydown",
+    event => {
+
+        if (
+            event.key === "Delete" ||
+            event.key === "Backspace"
+        ) {
+
+            const active =
+                document.activeElement;
 
             if (
-                !origemConexao
+                active.tagName === "INPUT" ||
+                active.tagName === "SELECT"
             ) {
-
-                origemConexao =
-                    operacao;
-
-                mostrarMensagem(
-                    `Operação ${operacao.id} selecionada como origem.`
-                );
-
-            } else {
-
-                if (
-                    origemConexao.id ===
-                    operacao.id
-                ) {
-
-                    mostrarMensagem(
-                        "A origem e o destino não podem ser a mesma operação."
-                    );
-
-                    return;
-
-                }
-
-
-                /*
-                 * Evita conexões duplicadas.
-                 */
-
-                if (
-                    !origemConexao.transicoes.includes(
-                        operacao.id
-                    )
-                ) {
-
-                    origemConexao.transicoes.push(
-                        operacao.id
-                    );
-
-                    mostrarMensagem(
-                        `Conexão criada: ${origemConexao.id} → ${operacao.id}.`
-                    );
-
-                } else {
-
-                    mostrarMensagem(
-                        "Essa conexão já existe."
-                    );
-
-                }
-
-
-                origemConexao =
-                    null;
-
-                desenhar();
-
+                return;
             }
 
-            return;
-        }
-
-
-        /*
-         * MODO EXCLUSÃO
-         */
-
-        if (
-            modo ===
-            "excluir"
-        ) {
-
-            if (operacao) {
-
-                excluirOperacao(
-                    operacao
-                );
-
-            }
-
-            return;
-        }
-
-
-        /*
-         * MODO DEFINIR INÍCIO
-         */
-
-        if (
-            modo ===
-            "inicio"
-        ) {
-
-            if (operacao) {
-
-                maquina.inicio =
-                    operacao.id;
-
-                mostrarMensagem(
-                    `Operação ${operacao.id} definida como início.`
-                );
-
-                desenhar();
-
-                atualizarInterface();
-
-            }
-
-            return;
-        }
-
-
-        /*
-         * MODO DEFINIR FIM
-         */
-
-        if (
-            modo ===
-            "fim"
-        ) {
-
-            if (operacao) {
-
-                maquina.fim =
-                    operacao.id;
-
-                mostrarMensagem(
-                    `Operação ${operacao.id} definida como fim.`
-                );
-
-                desenhar();
-
-                atualizarInterface();
-
-            }
-
-            return;
-        }
-
-
-        /*
-         * MODO SELECIONAR
-         */
-
-        if (
-            modo ===
-            "selecionar"
-        ) {
-
-            if (operacao) {
-
-                operacaoSelecionada =
-                    operacao;
-
-
-                operacaoArrastada =
-                    operacao;
-
-
-                deslocamentoX =
-                    posicao.x -
-                    operacao.x;
-
-
-                deslocamentoY =
-                    posicao.y -
-                    operacao.y;
-
-
-                atualizarInformacoesOperacao();
-
-                desenhar();
-
-            } else {
-
-                operacaoSelecionada =
-                    null;
-
-                atualizarInformacoesOperacao();
-
-                desenhar();
-
-            }
+            deleteSelected();
 
         }
 
-    }
-);
+        if (event.key === "Escape") {
 
+            machine.connectionMode = false;
 
-canvas.addEventListener(
-    "mousemove",
-    function (event) {
+            machine.connectionStart = null;
 
-        const posicao =
-            obterPosicaoMouse(
-                event
+            modeText.textContent =
+                "Modo: seleção";
+
+            modeText.classList.remove(
+                "connection-mode"
             );
 
+            machine.selectedNode = null;
+            machine.selectedEdge = null;
 
-        ultimaPosicaoMouse =
-            posicao;
-
-
-        /*
-         * Atualiza linha temporária.
-         */
-
-        if (
-            origemConexao
-        ) {
-
-            desenhar();
+            render();
 
         }
-
-
-        /*
-         * Move operação.
-         */
-
-        if (
-            operacaoArrastada &&
-            modo ===
-                "selecionar"
-        ) {
-
-            operacaoArrastada.x =
-                posicao.x -
-                deslocamentoX;
-
-
-            operacaoArrastada.y =
-                posicao.y -
-                deslocamentoY;
-
-
-            limitarOperacaoAoCanvas(
-                operacaoArrastada
-            );
-
-
-            desenhar();
-
-        }
-
-    }
-);
-
-
-canvas.addEventListener(
-    "mouseup",
-    function () {
-
-        operacaoArrastada =
-            null;
-
-    }
-);
-
-
-/* =========================================================
-   LIMITAR OPERAÇÃO AO CANVAS
-   ========================================================= */
-
-function limitarOperacaoAoCanvas(
-    operacao
-) {
-
-    const largura =
-        canvas.clientWidth;
-
-    const altura =
-        canvas.clientHeight;
-
-
-    operacao.x =
-        Math.max(
-            0,
-            Math.min(
-                operacao.x,
-                largura -
-                    LARGURA_OPERACAO
-            )
-        );
-
-
-    operacao.y =
-        Math.max(
-            0,
-            Math.min(
-                operacao.y,
-                altura -
-                    ALTURA_OPERACAO
-            )
-        );
-
-}
-
-
-/* =========================================================
-   EXCLUSÃO
-   ========================================================= */
-
-function excluirOperacao(
-    operacao
-) {
-
-    const id =
-        operacao.id;
-
-
-    /*
-     * Remove a operação.
-     */
-
-    maquina.operacoes =
-        maquina.operacoes.filter(
-            item =>
-                item.id !== id
-        );
-
-
-    /*
-     * Remove conexões que
-     * apontavam para ela.
-     */
-
-    for (
-        const outra
-        of maquina.operacoes
-    ) {
-
-        outra.transicoes =
-            outra.transicoes.filter(
-                destinoId =>
-                    destinoId !== id
-            );
-
-    }
-
-
-    /*
-     * Remove início/fim
-     * caso necessário.
-     */
-
-    if (
-        maquina.inicio === id
-    ) {
-
-        maquina.inicio =
-            null;
-
-    }
-
-
-    if (
-        maquina.fim === id
-    ) {
-
-        maquina.fim =
-            null;
-
-    }
-
-
-    if (
-        operacaoSelecionada ===
-        operacao
-    ) {
-
-        operacaoSelecionada =
-            null;
-
-    }
-
-
-    if (
-        operacaoAtual ===
-        operacao
-    ) {
-
-        operacaoAtual =
-            null;
-
-    }
-
-
-    mostrarMensagem(
-        `Operação ${id} excluída.`
-    );
-
-
-    atualizarInterface();
-
-    atualizarInformacoesOperacao();
-
-    desenhar();
-
-}
-
-
-/* =========================================================
-   MODOS DO EDITOR
-   ========================================================= */
-
-function mudarModo(
-    novoModo
-) {
-
-    modo =
-        novoModo;
-
-
-    origemConexao =
-        null;
-
-
-    /*
-     * Remove classes dos botões.
-     */
-
-    btnConectar.classList.remove(
-        "ativo"
-    );
-
-    btnSelecionar.classList.remove(
-        "ativo"
-    );
-
-    btnExcluir.classList.remove(
-        "ativo"
-    );
-
-    btnInicio.classList.remove(
-        "ativo"
-    );
-
-    btnFim.classList.remove(
-        "ativo"
-    );
-
-
-    /*
-     * Atualiza botão ativo.
-     */
-
-    if (
-        novoModo ===
-        "conectar"
-    ) {
-
-        btnConectar.classList.add(
-            "ativo"
-        );
-
-    }
-
-
-    if (
-        novoModo ===
-        "selecionar"
-    ) {
-
-        btnSelecionar.classList.add(
-            "ativo"
-        );
-
-    }
-
-
-    if (
-        novoModo ===
-        "excluir"
-    ) {
-
-        btnExcluir.classList.add(
-            "ativo"
-        );
-
-    }
-
-
-    if (
-        novoModo ===
-        "inicio"
-    ) {
-
-        btnInicio.classList.add(
-            "ativo"
-        );
-
-    }
-
-
-    if (
-        novoModo ===
-        "fim"
-    ) {
-
-        btnFim.classList.add(
-            "ativo"
-        );
-
-    }
-
-
-    const nomes = {
-
-        selecionar:
-            "Selecionar",
-
-        conectar:
-            "Conectar",
-
-        excluir:
-            "Excluir",
-
-        inicio:
-            "Definir início",
-
-        fim:
-            "Definir fim"
-
-    };
-
-
-    modoAtualHTML.textContent =
-        `Modo: ${nomes[novoModo]}`;
-
-}
-
-
-/* =========================================================
-   BOTÕES DO EDITOR
-   ========================================================= */
-
-btnAdicionar.addEventListener(
-    "click",
-    function () {
-
-        const tipo =
-            tipoOperacao.value;
-
-
-        const largura =
-            canvas.clientWidth;
-
-        const altura =
-            canvas.clientHeight;
-
-
-        /*
-         * Cria no centro da área.
-         */
-
-        criarOperacao(
-            largura / 2,
-            altura / 2,
-            tipo
-        );
-
-    }
-);
-
-
-btnSelecionar.addEventListener(
-    "click",
-    function () {
-
-        mudarModo(
-            "selecionar"
-        );
-
-    }
-);
-
-
-btnConectar.addEventListener(
-    "click",
-    function () {
-
-        mudarModo(
-            "conectar"
-        );
-
-        mostrarMensagem(
-            "Clique na operação de origem e depois na operação de destino."
-        );
-
-    }
-);
-
-
-btnExcluir.addEventListener(
-    "click",
-    function () {
-
-        mudarModo(
-            "excluir"
-        );
-
-        mostrarMensagem(
-            "Clique em uma operação para excluí-la."
-        );
-
-    }
-);
-
-
-btnInicio.addEventListener(
-    "click",
-    function () {
-
-        mudarModo(
-            "inicio"
-        );
-
-        mostrarMensagem(
-            "Clique na operação que será o início da máquina."
-        );
-
-    }
-);
-
-
-btnFim.addEventListener(
-    "click",
-    function () {
-
-        mudarModo(
-            "fim"
-        );
-
-        mostrarMensagem(
-            "Clique na operação que será o fim da máquina."
-        );
 
     }
 );
@@ -1593,250 +936,226 @@ btnFim.addEventListener(
    FILA
    ========================================================= */
 
-function definirFila() {
+function setInputWord() {
 
-    const texto =
-        entradaFila.value.trim();
+    const input =
+        document.getElementById(
+            "inputWord"
+        );
+
+    machine.inputWord =
+        input.value.trim();
+
+    machine.queue =
+        [...machine.inputWord];
+
+    machine.currentNode = null;
+
+    updateQueue();
+
+    executionStatus.textContent =
+        "Entrada definida.";
+
+    render();
+
+}
 
 
-    if (!texto) {
+/* =========================================================
+   ATUALIZAR FILA
+   ========================================================= */
 
-        fila =
-            [];
+function updateQueue() {
 
-        filaInicial =
-            [];
+    if (machine.queue.length === 0) {
 
-        atualizarFilaVisual();
+        queueElement.textContent = "ε";
 
         return;
 
     }
 
+    queueElement.textContent =
+        machine.queue.join("");
 
-    /*
-     * Aceita:
-     *
-     * A B B A
-     *
-     * ou:
-     *
-     * ABBA
-     *
-     */
+}
 
-    if (
-        texto.includes(" ")
-    ) {
 
-        fila =
-            texto
-                .split(/\s+/)
-                .filter(
-                    item =>
-                        item.length > 0
+/* =========================================================
+   VALIDAR MÁQUINA
+   ========================================================= */
+
+function validateMachine() {
+
+    const errors = [];
+    const warnings = [];
+
+
+    const starts =
+        machine.nodes.filter(
+            n => n.type === "partida"
+        );
+
+    if (starts.length === 0) {
+
+        errors.push(
+            "A máquina precisa ter uma instrução de partida."
+        );
+
+    }
+
+    if (starts.length > 1) {
+
+        errors.push(
+            "A máquina deve possuir apenas uma instrução de partida."
+        );
+
+    }
+
+
+    const terminals =
+        machine.nodes.filter(
+            n =>
+                n.type === "aceita" ||
+                n.type === "rejeita"
+        );
+
+    if (terminals.length === 0) {
+
+        warnings.push(
+            "A máquina não possui uma instrução de parada."
+        );
+
+    }
+
+
+    machine.nodes.forEach(node => {
+
+        if (
+            node.type !== "aceita" &&
+            node.type !== "rejeita"
+        ) {
+
+            const outgoing =
+                machine.edges.filter(
+                    e => e.from === node.id
                 );
+
+            if (outgoing.length === 0) {
+
+                warnings.push(
+                    `O nó "${getNodeLabel(node)}" não possui saída.`
+                );
+
+            }
+
+        }
+
+    });
+
+
+    machine.edges.forEach(edge => {
+
+        const source =
+            machine.nodes.find(
+                n => n.id === edge.from
+            );
+
+        if (
+            source &&
+            source.type === "teste" &&
+            !edge.label
+        ) {
+
+            warnings.push(
+                "Existe uma conexão de teste sem rótulo."
+            );
+
+        }
+
+    });
+
+
+    if (errors.length === 0) {
+
+        validationResult.innerHTML =
+            `<div class="success">
+                ✓ Máquina estruturalmente válida.
+             </div>`;
 
     } else {
 
-        fila =
-            [...texto];
+        validationResult.innerHTML =
+            `<div class="error">
+                ${errors.map(
+                    e => "✗ " + e
+                ).join("<br>")}
+             </div>`;
 
     }
 
 
-    filaInicial =
-        [...fila];
+    if (warnings.length > 0) {
+
+        validationResult.innerHTML +=
+            `<div class="warning" style="margin-top:8px;">
+                ${warnings.map(
+                    w => "⚠ " + w
+                ).join("<br>")}
+             </div>`;
+
+    }
+
+}
 
 
-    atualizarFilaVisual();
+/* =========================================================
+   ENCONTRAR PRÓXIMO NÓ
+   ========================================================= */
+
+function getNextNode(currentNode, symbol) {
+
+    const outgoing =
+        machine.edges.filter(
+            e => e.from === currentNode.id
+        );
 
 
-    mostrarMensagem(
-        "Fila definida com sucesso."
+    if (currentNode.type === "teste") {
+
+        let edge =
+            outgoing.find(
+                e => e.label === symbol
+            );
+
+        if (!edge) {
+
+            edge =
+                outgoing.find(
+                    e => e.label === "ε" &&
+                    symbol === "ε"
+                );
+
+        }
+
+        if (!edge) {
+            return null;
+        }
+
+        return machine.nodes.find(
+            n => n.id === edge.to
+        );
+
+    }
+
+
+    if (outgoing.length === 0) {
+        return null;
+    }
+
+    return machine.nodes.find(
+        n => n.id === outgoing[0].to
     );
-
-}
-
-
-btnDefinirFila.addEventListener(
-    "click",
-    definirFila
-);
-
-
-/* =========================================================
-   VISUALIZAÇÃO DA FILA
-   ========================================================= */
-
-function atualizarFilaVisual() {
-
-    filaVisual.innerHTML = "";
-
-
-    if (
-        fila.length === 0
-    ) {
-
-        filaVisual.textContent =
-            "Fila vazia";
-
-        return;
-
-    }
-
-
-    for (
-        const simbolo
-        of fila
-    ) {
-
-        const elemento =
-            document.createElement(
-                "div"
-            );
-
-
-        elemento.className =
-            "item-fila";
-
-
-        elemento.textContent =
-            simbolo;
-
-
-        filaVisual.appendChild(
-            elemento
-        );
-
-    }
-
-}
-
-
-/* =========================================================
-   SIMULAÇÃO
-   ========================================================= */
-
-function iniciarSimulacao() {
-
-    if (
-        maquina.operacoes.length ===
-        0
-    ) {
-
-        mostrarMensagem(
-            "Não existem operações na máquina."
-        );
-
-        return;
-
-    }
-
-
-    if (
-        maquina.inicio ===
-        null
-    ) {
-
-        mostrarMensagem(
-            "Defina uma operação como início."
-        );
-
-        return;
-
-    }
-
-
-    if (
-        !operacaoAtual
-    ) {
-
-        operacaoAtual =
-            encontrarOperacao(
-                maquina.inicio
-            );
-
-    }
-
-
-    executando =
-        true;
-
-
-    statusExecucaoHTML.textContent =
-        "Executando";
-
-
-    iniciarIntervalo();
-
-
-    desenhar();
-
-}
-
-
-function iniciarIntervalo() {
-
-    if (
-        intervaloExecucao
-    ) {
-
-        clearInterval(
-            intervaloExecucao
-        );
-
-    }
-
-
-    intervaloExecucao =
-        setInterval(
-            function () {
-
-                const sucesso =
-                    executarPasso();
-
-
-                if (
-                    !sucesso
-                ) {
-
-                    pausarSimulacao();
-
-                }
-
-            },
-            1000
-        );
-
-}
-
-
-function pausarSimulacao() {
-
-    executando =
-        false;
-
-
-    if (
-        intervaloExecucao
-    ) {
-
-        clearInterval(
-            intervaloExecucao
-        );
-
-        intervaloExecucao =
-            null;
-
-    }
-
-
-    statusExecucaoHTML.textContent =
-        "Pausado";
-
-
-    desenhar();
 
 }
 
@@ -1845,109 +1164,152 @@ function pausarSimulacao() {
    EXECUTAR UM PASSO
    ========================================================= */
 
-function executarPasso() {
+function stepMachine() {
 
-    if (
-        !operacaoAtual
-    ) {
+    if (machine.currentNode === null) {
 
-        mostrarMensagem(
-            "Não existe operação atual."
-        );
-
-        return false;
-
-    }
-
-
-    /*
-     * Mostra a operação atual.
-     */
-
-    operacaoAtualHTML.textContent =
-        `#${operacaoAtual.id} - ${nomeTipo(operacaoAtual.tipo)}`;
-
-
-    /*
-     * Executa a instrução.
-     */
-
-    const resultado =
-        executarInstrucao(
-            operacaoAtual
-        );
-
-
-    if (
-        resultado.parar
-    ) {
-
-        executando =
-            false;
-
-
-        statusExecucaoHTML.textContent =
-            "Finalizado";
-
-
-        mostrarMensagem(
-            "Execução finalizada."
-        );
-
-
-        desenhar();
-
-
-        return false;
-
-    }
-
-
-    /*
-     * Determina próxima operação.
-     */
-
-    if (
-        resultado.proximaOperacaoId
-    ) {
-
-        operacaoAtual =
-            encontrarOperacao(
-                resultado.proximaOperacaoId
+        const start =
+            machine.nodes.find(
+                n => n.type === "partida"
             );
 
-    } else {
+        if (!start) {
 
-        /*
-         * Se não houver transição,
-         * a execução termina.
-         */
+            executionStatus.textContent =
+                "Erro: não existe partida.";
 
-        mostrarMensagem(
-            `A operação #${operacaoAtual.id} não possui próxima transição.`
+            return false;
+
+        }
+
+        machine.currentNode =
+            start.id;
+
+        render();
+
+        return true;
+
+    }
+
+
+    const current =
+        machine.nodes.find(
+            n => n.id === machine.currentNode
         );
 
-
-        executando =
-            false;
-
-
-        statusExecucaoHTML.textContent =
-            "Finalizado";
+    if (!current) {
+        return false;
+    }
 
 
-        desenhar();
+    /* ACEITA */
 
+    if (current.type === "aceita") {
+
+        executionStatus.textContent =
+            "✓ Palavra aceita.";
+
+        machine.running = false;
 
         return false;
 
     }
 
 
-    atualizarFilaVisual();
+    /* REJEITA */
 
-    desenhar();
+    if (current.type === "rejeita") {
 
+        executionStatus.textContent =
+            "✗ Palavra rejeitada.";
+
+        machine.running = false;
+
+        return false;
+
+    }
+
+
+    let symbol =
+        machine.queue.length > 0
+            ? machine.queue[0]
+            : "ε";
+
+
+    /* TESTE */
+
+    if (current.type === "teste") {
+
+        if (machine.queue.length > 0) {
+
+            machine.queue.shift();
+
+            updateQueue();
+
+        }
+
+        const next =
+            getNextNode(
+                current,
+                symbol
+            );
+
+        if (!next) {
+
+            executionStatus.textContent =
+                `Não existe saída para "${symbol}".`;
+
+            machine.running = false;
+
+            return false;
+
+        }
+
+        machine.currentNode =
+            next.id;
+
+        render();
+
+        return true;
+
+    }
+
+
+    /* ATRIBUIÇÃO */
+
+    if (current.type === "atribuicao") {
+
+        machine.queue.push(
+            current.symbol
+        );
+
+        updateQueue();
+
+    }
+
+
+    const next =
+        getNextNode(
+            current,
+            symbol
+        );
+
+    if (!next) {
+
+        executionStatus.textContent =
+            "A máquina não possui uma próxima instrução.";
+
+        machine.running = false;
+
+        return false;
+
+    }
+
+
+    machine.currentNode =
+        next.id;
+
+    render();
 
     return true;
 
@@ -1955,528 +1317,362 @@ function executarPasso() {
 
 
 /* =========================================================
-   EXECUÇÃO DAS INSTRUÇÕES
+   EXECUÇÃO AUTOMÁTICA
    ========================================================= */
 
-function executarInstrucao(
-    operacao
-) {
+function executeMachine() {
 
-    switch (
-        operacao.tipo
-    ) {
+    if (machine.running) {
+        return;
+    }
 
-        case "entrada":
+    machine.running = true;
+    machine.paused = false;
 
-            mostrarMensagem(
-                "Operação de entrada."
-            );
-
-            break;
+    executionStatus.textContent =
+        "Executando...";
 
 
-        case "escrever":
+    let steps = 0;
 
-            /*
-             * Nesta primeira versão,
-             * adicionamos um símbolo X.
-             *
-             * Posteriormente vamos substituir
-             * pelo comportamento exato da
-             * Máquina de Post definida no material.
-             */
+    machine.timer =
+        setInterval(() => {
 
-            fila.push("X");
-
-
-            mostrarMensagem(
-                "Símbolo X adicionado à fila."
-            );
-
-            break;
-
-
-        case "apagar":
-
-            if (
-                fila.length > 0
-            ) {
-
-                const removido =
-                    fila.shift();
-
-
-                mostrarMensagem(
-                    `Símbolo ${removido} removido da fila.`
-                );
-
-            } else {
-
-                mostrarMensagem(
-                    "A fila está vazia."
-                );
-
+            if (!machine.running) {
+                return;
             }
 
-            break;
+            const result =
+                stepMachine();
 
+            steps++;
 
-        case "testar":
+            if (!result) {
 
-            mostrarMensagem(
-                "Teste realizado."
-            );
-
-            break;
-
-
-        case "parar":
-
-            return {
-
-                parar: true,
-
-                proximaOperacaoId:
-                    null
-
-            };
-
-    }
-
-
-    /*
-     * Usa a primeira transição
-     * como próxima operação.
-     */
-
-    const proxima =
-        operacao.transicoes[0];
-
-
-    return {
-
-        parar: false,
-
-        proximaOperacaoId:
-            proxima || null
-
-    };
-
-}
-
-
-/* =========================================================
-   BUSCAR OPERAÇÃO
-   ========================================================= */
-
-function encontrarOperacao(
-    id
-) {
-
-    return maquina.operacoes.find(
-        operacao =>
-            operacao.id === id
-    ) || null;
-
-}
-
-
-/* =========================================================
-   REINICIAR SIMULAÇÃO
-   ========================================================= */
-
-function reiniciarSimulacao() {
-
-    pausarSimulacao();
-
-
-    fila =
-        [...filaInicial];
-
-
-    if (
-        maquina.inicio !==
-        null
-    ) {
-
-        operacaoAtual =
-            encontrarOperacao(
-                maquina.inicio
-            );
-
-    } else {
-
-        operacaoAtual =
-            null;
-
-    }
-
-
-    statusExecucaoHTML.textContent =
-        "Parado";
-
-
-    operacaoAtualHTML.textContent =
-        "-";
-
-
-    atualizarFilaVisual();
-
-    desenhar();
-
-
-    mostrarMensagem(
-        "Simulação reiniciada."
-    );
-
-}
-
-
-/* =========================================================
-   BOTÕES DE EXECUÇÃO
-   ========================================================= */
-
-btnExecutar.addEventListener(
-    "click",
-    function () {
-
-        iniciarSimulacao();
-
-    }
-);
-
-
-btnPasso.addEventListener(
-    "click",
-    function () {
-
-        if (
-            !operacaoAtual
-        ) {
-
-            if (
-                maquina.inicio ===
-                null
-            ) {
-
-                mostrarMensagem(
-                    "Defina o início da máquina antes de executar."
+                clearInterval(
+                    machine.timer
                 );
+
+                machine.timer = null;
+
+                machine.running = false;
 
                 return;
 
             }
 
 
-            operacaoAtual =
-                encontrarOperacao(
-                    maquina.inicio
+            if (steps > 10000) {
+
+                clearInterval(
+                    machine.timer
                 );
 
-        }
+                machine.timer = null;
+
+                machine.running = false;
+
+                executionStatus.textContent =
+                    "⚠ Limite de passos atingido. Possível loop infinito.";
+
+            }
+
+        }, 500);
+
+}
 
 
-        statusExecucaoHTML.textContent =
-            "Executando passo";
+/* =========================================================
+   PAUSAR
+   ========================================================= */
 
+function pauseMachine() {
 
-        executarPasso();
+    machine.running = false;
 
-    }
-);
+    if (machine.timer) {
 
-
-btnPausar.addEventListener(
-    "click",
-    function () {
-
-        pausarSimulacao();
-
-        mostrarMensagem(
-            "Execução pausada."
+        clearInterval(
+            machine.timer
         );
 
-    }
-);
-
-
-btnReiniciar.addEventListener(
-    "click",
-    function () {
-
-        reiniciarSimulacao();
+        machine.timer = null;
 
     }
-);
+
+    executionStatus.textContent =
+        "Execução pausada.";
+
+}
+
+
+/* =========================================================
+   RESETAR EXECUÇÃO
+   ========================================================= */
+
+function resetExecution() {
+
+    pauseMachine();
+
+    machine.queue =
+        [...machine.inputWord];
+
+    machine.currentNode = null;
+
+    updateQueue();
+
+    executionStatus.textContent =
+        "Máquina parada.";
+
+    render();
+
+}
 
 
 /* =========================================================
    NOVA MÁQUINA
    ========================================================= */
 
-function novaMaquina() {
+function newMachine() {
 
-    pausarSimulacao();
+    pauseMachine();
 
+    machine.nodes = [];
+    machine.edges = [];
 
-    maquina.operacoes =
-        [];
+    machine.nextNodeId = 1;
+    machine.nextEdgeId = 1;
 
-    maquina.inicio =
-        null;
+    machine.selectedNode = null;
+    machine.selectedEdge = null;
 
-    maquina.fim =
-        null;
+    machine.connectionMode = false;
+    machine.connectionStart = null;
 
+    machine.currentNode = null;
 
-    proximoId =
-        1;
+    machine.inputWord = "";
+    machine.queue = [];
 
+    document.getElementById(
+        "inputWord"
+    ).value = "";
 
-    operacaoSelecionada =
-        null;
+    properties.innerHTML =
+        `<p class="empty">
+            Selecione uma operação ou conexão.
+         </p>`;
 
+    validationResult.innerHTML = "";
 
-    operacaoAtual =
-        null;
+    modeText.textContent =
+        "Modo: seleção";
 
-
-    origemConexao =
-        null;
-
-
-    fila =
-        [];
-
-    filaInicial =
-        [];
-
-
-    entradaFila.value =
-        "";
-
-
-    atualizarInterface();
-
-    atualizarInformacoesOperacao();
-
-    atualizarFilaVisual();
-
-    desenhar();
-
-
-    mostrarMensagem(
-        "Nova máquina criada."
+    modeText.classList.remove(
+        "connection-mode"
     );
+
+    updateQueue();
+
+    render();
 
 }
 
 
-btnNova.addEventListener(
-    "click",
-    novaMaquina
-);
-
-
 /* =========================================================
-   EXEMPLO
+   EXEMPLO DE MÁQUINA
+   =========================================================
+
+   Exemplo simples:
+
+   PARTIDA
+      ↓
+   TESTE
+    ↙   ↘
+   0     1
+    ↓     ↓
+   TESTE  TESTE
+      ...
+
+   Para deixar o exemplo mais simples,
+   usamos uma máquina que lê o primeiro
+   símbolo e aceita se for 0.
    ========================================================= */
 
-function carregarExemplo() {
+function loadExample() {
 
-    novaMaquina();
-
-
-    const op1 =
-        criarOperacao(
-            180,
-            150,
-            "entrada"
-        );
+    newMachine();
 
 
-    const op2 =
-        criarOperacao(
-            430,
-            150,
-            "escrever"
-        );
+    const start = {
+
+        id: machine.nextNodeId++,
+
+        type: "partida",
+
+        x: 100,
+        y: 270,
+
+        symbol: "#"
+
+    };
 
 
-    const op3 =
-        criarOperacao(
-            680,
-            150,
-            "apagar"
-        );
+    const test = {
+
+        id: machine.nextNodeId++,
+
+        type: "teste",
+
+        x: 300,
+        y: 270,
+
+        symbol: "#"
+
+    };
 
 
-    const op4 =
-        criarOperacao(
-            930,
-            150,
-            "parar"
-        );
+    const accept = {
+
+        id: machine.nextNodeId++,
+
+        type: "aceita",
+
+        x: 550,
+        y: 180,
+
+        symbol: "#"
+
+    };
 
 
-    op1.transicoes.push(
-        op2.id
+    const reject = {
+
+        id: machine.nextNodeId++,
+
+        type: "rejeita",
+
+        x: 550,
+        y: 360,
+
+        symbol: "#"
+
+    };
+
+
+    machine.nodes.push(
+        start,
+        test,
+        accept,
+        reject
     );
 
 
-    op2.transicoes.push(
-        op3.id
-    );
+    machine.edges.push({
+
+        id: machine.nextEdgeId++,
+
+        from: start.id,
+
+        to: test.id,
+
+        label: "",
+
+        bendX: 200,
+
+        bendY: 270
+
+    });
 
 
-    op3.transicoes.push(
-        op4.id
-    );
+    machine.edges.push({
+
+        id: machine.nextEdgeId++,
+
+        from: test.id,
+
+        to: accept.id,
+
+        label: "0",
+
+        bendX: 425,
+
+        bendY: 200
+
+    });
 
 
-    maquina.inicio =
-        op1.id;
+    machine.edges.push({
+
+        id: machine.nextEdgeId++,
+
+        from: test.id,
+
+        to: reject.id,
+
+        label: "1",
+
+        bendX: 425,
+
+        bendY: 340
+
+    });
 
 
-    maquina.fim =
-        op4.id;
+    render();
 
-
-    fila =
-        ["A", "B", "B", "A"];
-
-
-    filaInicial =
-        [...fila];
-
-
-    entradaFila.value =
-        "A B B A";
-
-
-    operacaoAtual =
-        op1;
-
-
-    atualizarInterface();
-
-    atualizarFilaVisual();
-
-    desenhar();
-
-
-    mostrarMensagem(
-        "Exemplo carregado. Clique em Próximo passo para testar."
-    );
+    setInputExample();
 
 }
 
 
-btnExemplo.addEventListener(
-    "click",
-    carregarExemplo
-);
+/* =========================================================
+   INPUT DO EXEMPLO
+   ========================================================= */
+
+function setInputExample() {
+
+    document.getElementById(
+        "inputWord"
+    ).value = "0";
+
+    setInputWord();
+
+}
 
 
 /* =========================================================
-   INTERFACE
+   CLIQUE FORA DOS NÓS
    ========================================================= */
 
-function atualizarInterface() {
+canvas.addEventListener(
+    "mousedown",
+    event => {
 
-    quantidadeOperacoesHTML.textContent =
-        maquina.operacoes.length;
+        if (
+            event.target === canvas ||
+            event.target === nodesContainer
+        ) {
 
+            machine.selectedNode = null;
 
-    if (
-        operacaoAtual
-    ) {
+            machine.selectedEdge = null;
 
-        operacaoAtualHTML.textContent =
-            `#${operacaoAtual.id} - ${nomeTipo(operacaoAtual.tipo)}`;
+            properties.innerHTML =
+                `<p class="empty">
+                    Selecione uma operação ou conexão.
+                 </p>`;
 
-    } else {
+            render();
 
-        operacaoAtualHTML.textContent =
-            "-";
+        }
 
     }
-
-}
-
-
-/* =========================================================
-   INFORMAÇÕES DA OPERAÇÃO
-   ========================================================= */
-
-function atualizarInformacoesOperacao() {
-
-    if (
-        !operacaoSelecionada
-    ) {
-
-        informacoesOperacao.innerHTML =
-            `
-                <p>
-                    Nenhuma operação selecionada.
-                </p>
-            `;
-
-        return;
-
-    }
-
-
-    const quantidadeConexoes =
-        operacaoSelecionada.transicoes.length;
-
-
-    informacoesOperacao.innerHTML =
-        `
-            <p>
-                <strong>ID:</strong>
-                #${operacaoSelecionada.id}
-            </p>
-
-            <p>
-                <strong>Tipo:</strong>
-                ${nomeTipo(operacaoSelecionada.tipo)}
-            </p>
-
-            <p>
-                <strong>Saídas:</strong>
-                ${quantidadeConexoes}
-            </p>
-        `;
-
-}
-
-
-/* =========================================================
-   MENSAGENS
-   ========================================================= */
-
-function mostrarMensagem(
-    mensagem
-) {
-
-    mensagens.textContent =
-        mensagem;
-
-}
+);
 
 
 /* =========================================================
    INICIALIZAÇÃO
    ========================================================= */
 
-mudarModo(
-    "selecionar"
-);
-
-
-ajustarCanvas();
-
-atualizarInterface();
-
-atualizarFilaVisual();
+render();
