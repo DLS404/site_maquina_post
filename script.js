@@ -434,44 +434,49 @@ function createEdge(from, to) {
             n => n.id === to
         );
 
-
     let label = "";
 
-
-    /*
-       Teste precisa ter rótulo.
-
-       Os rótulos possíveis serão:
-       símbolos do alfabeto,
-       #
-       ε
-    */
-
     if (source.type === "teste") {
-
         label = "ε";
-
     }
 
+    /*
+       A curva agora guarda um deslocamento
+       em relação ao meio da conexão.
+
+       Assim, se os estados forem movidos,
+       a curva acompanha os estados.
+    */
+
+    const sourceX = source.x + 65;
+    const sourceY = source.y + 30;
+
+    const targetX = target.x + 65;
+    const targetY = target.y + 30;
+
+    const middleX =
+        (sourceX + targetX) / 2;
+
+    const middleY =
+        (sourceY + targetY) / 2;
 
     const edge = {
 
         id: machine.nextEdgeId++,
 
         from,
-
         to,
 
         label,
 
-        bendX:
-            (source.x + target.x) / 2,
+        /*
+           Curva padrão para cima.
+        */
 
-        bendY:
-            (source.y + target.y) / 2 - 50
+        bendOffsetX: 0,
+        bendOffsetY: -50
 
     };
-
 
     machine.edges.push(edge);
 
@@ -511,6 +516,10 @@ function renderEdges() {
         }
 
 
+        /*
+           Centro dos estados
+        */
+
         const sx =
             source.x + 65;
 
@@ -524,12 +533,33 @@ function renderEdges() {
             target.y + 30;
 
 
+        /*
+           Calcula novamente o ponto
+           de controle da curva.
+
+           Isso faz a curva acompanhar
+           os estados quando eles são movidos.
+        */
+
+        const middleX =
+            (sx + tx) / 2;
+
+        const middleY =
+            (sy + ty) / 2;
+
+
         const cx =
-            edge.bendX;
+            middleX +
+            (edge.bendOffsetX || 0);
 
         const cy =
-            edge.bendY;
+            middleY +
+            (edge.bendOffsetY || 0);
 
+
+        /*
+           CURVA
+        */
 
         const path =
             document.createElementNS(
@@ -579,7 +609,33 @@ function renderEdges() {
         svg.appendChild(path);
 
 
+        /*
+           RÓTULO DA CONEXÃO
+
+           O texto é colocado no meio
+           da própria curva.
+
+           Para uma curva quadrática,
+           o ponto central é:
+
+           B(0.5) =
+           0.25 P0 +
+           0.5 P1 +
+           0.25 P2
+        */
+
         if (edge.label) {
+
+            const labelX =
+                0.25 * sx +
+                0.50 * cx +
+                0.25 * tx;
+
+            const labelY =
+                0.25 * sy +
+                0.50 * cy +
+                0.25 * ty;
+
 
             const label =
                 document.createElementNS(
@@ -587,33 +643,46 @@ function renderEdges() {
                     "text"
                 );
 
+
             label.classList.add(
                 "edge-element",
                 "edge-label"
             );
 
+
             label.setAttribute(
                 "x",
-                cx
+                labelX
             );
+
 
             label.setAttribute(
                 "y",
-                cy - 8
+                labelY - 8
             );
+
 
             label.setAttribute(
                 "text-anchor",
                 "middle"
             );
 
+
             label.textContent =
                 edge.label;
+
 
             svg.appendChild(label);
 
         }
 
+
+        /*
+           PONTO DE CONTROLE DA CURVA
+
+           Aparece somente quando
+           a conexão está selecionada.
+        */
 
         if (
             machine.selectedEdge ===
@@ -626,30 +695,36 @@ function renderEdges() {
                     "circle"
                 );
 
+
             handle.classList.add(
                 "edge-element",
                 "edge-handle"
             );
+
 
             handle.setAttribute(
                 "cx",
                 cx
             );
 
+
             handle.setAttribute(
                 "cy",
                 cy
             );
+
 
             handle.setAttribute(
                 "r",
                 7
             );
 
+
             setupEdgeHandle(
                 handle,
                 edge
             );
+
 
             svg.appendChild(handle);
 
@@ -658,7 +733,6 @@ function renderEdges() {
     });
 
 }
-
 
 /* =========================================================
    MOVER CURVA
@@ -694,16 +768,83 @@ function setupEdgeHandle(
                 return;
             }
 
+
             const rect =
                 canvas.getBoundingClientRect();
 
-            edge.bendX =
+
+            /*
+               Posição atual do mouse
+            */
+
+            const mouseX =
                 event.clientX -
                 rect.left;
 
-            edge.bendY =
+            const mouseY =
                 event.clientY -
                 rect.top;
+
+
+            /*
+               Localiza os dois estados
+            */
+
+            const source =
+                machine.nodes.find(
+                    n => n.id === edge.from
+                );
+
+            const target =
+                machine.nodes.find(
+                    n => n.id === edge.to
+                );
+
+
+            if (!source || !target) {
+                return;
+            }
+
+
+            /*
+               Centro atual da conexão
+            */
+
+            const sx =
+                source.x + 65;
+
+            const sy =
+                source.y + 30;
+
+            const tx =
+                target.x + 65;
+
+            const ty =
+                target.y + 30;
+
+
+            const middleX =
+                (sx + tx) / 2;
+
+            const middleY =
+                (sy + ty) / 2;
+
+
+            /*
+               Guarda somente o deslocamento
+               em relação ao centro.
+
+               Assim, quando os estados
+               forem movidos, a curva continua
+               acompanhando-os.
+            */
+
+            edge.bendOffsetX =
+                mouseX - middleX;
+
+            edge.bendOffsetY =
+                mouseY - middleY;
+
 
             renderEdges();
 
@@ -1429,7 +1570,7 @@ function stepMachine() {
 
     /*
        X ← X#
-
+       
        Este é o ponto importante:
        o # é colocado no final
        da fila.
