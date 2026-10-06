@@ -512,12 +512,127 @@ function createEdge(from, to) {
 
 function renderEdges() {
 
+    /*
+       Remove somente os elementos das conexões.
+    */
+
     svg.querySelectorAll(
         ".edge-element"
     ).forEach(
         el => el.remove()
     );
 
+
+    /*
+       Cria o marcador da ponta da seta.
+    */
+
+    let defs =
+        svg.querySelector("defs");
+
+    if (!defs) {
+
+        defs =
+            document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "defs"
+            );
+
+        svg.insertBefore(
+            defs,
+            svg.firstChild
+        );
+
+    }
+
+
+    /*
+       Evita criar a seta várias vezes.
+    */
+
+    let marker =
+        svg.querySelector(
+            "#arrowhead"
+        );
+
+
+    if (!marker) {
+
+        marker =
+            document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "marker"
+            );
+
+        marker.setAttribute(
+            "id",
+            "arrowhead"
+        );
+
+        marker.setAttribute(
+            "markerWidth",
+            "10"
+        );
+
+        marker.setAttribute(
+            "markerHeight",
+            "7"
+        );
+
+        marker.setAttribute(
+            "refX",
+            "9"
+        );
+
+        marker.setAttribute(
+            "refY",
+            "3.5"
+        );
+
+        marker.setAttribute(
+            "orient",
+            "auto"
+        );
+
+        marker.setAttribute(
+            "markerUnits",
+            "strokeWidth"
+        );
+
+
+        const arrow =
+            document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "path"
+            );
+
+
+        arrow.setAttribute(
+            "d",
+            "M 0 0 L 10 3.5 L 0 7 Z"
+        );
+
+
+        arrow.setAttribute(
+            "fill",
+            "#555"
+        );
+
+
+        marker.appendChild(
+            arrow
+        );
+
+        defs.appendChild(
+            marker
+        );
+
+    }
+
+
+    /*
+       Desenha cada conexão.
+    */
 
     machine.edges.forEach(edge => {
 
@@ -538,7 +653,7 @@ function renderEdges() {
 
 
         /*
-           CENTRO DOS ESTADOS
+           Centro dos estados.
         */
 
         const sx =
@@ -555,7 +670,7 @@ function renderEdges() {
 
 
         /*
-           CENTRO DA CONEXÃO
+           Centro entre os dois estados.
         */
 
         const middleX =
@@ -566,7 +681,7 @@ function renderEdges() {
 
 
         /*
-           PONTO DE CONTROLE
+           Ponto de controle da curva.
         */
 
         const cx =
@@ -579,7 +694,9 @@ function renderEdges() {
 
 
         /*
-           LINHA / CURVA
+           ==================================================
+           LINHA VISÍVEL
+           ==================================================
         */
 
         const path =
@@ -615,6 +732,20 @@ function renderEdges() {
         );
 
 
+        /*
+           A ponta da seta fica no destino.
+        */
+
+        path.setAttribute(
+            "marker-end",
+            "url(#arrowhead)"
+        );
+
+
+        /*
+           Clique seleciona a conexão.
+        */
+
         path.addEventListener(
             "click",
             event => {
@@ -631,30 +762,110 @@ function renderEdges() {
 
 
         /*
+           ==================================================
+           ÁREA INVISÍVEL PARA ARRASTAR A CONEXÃO
+           ==================================================
+
+           Essa linha fica por cima da linha normal,
+           mas é transparente e mais grossa.
+
+           Assim fica muito mais fácil pegar a conexão.
+        */
+
+        const hitPath =
+            document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "path"
+            );
+
+
+        hitPath.classList.add(
+            "edge-element"
+        );
+
+
+        hitPath.setAttribute(
+            "d",
+            `M ${sx} ${sy}
+             Q ${cx} ${cy}
+               ${tx} ${ty}`
+        );
+
+
+        hitPath.setAttribute(
+            "fill",
+            "none"
+        );
+
+
+        hitPath.setAttribute(
+            "stroke",
+            "transparent"
+        );
+
+
+        hitPath.setAttribute(
+            "stroke-width",
+            "18"
+        );
+
+
+        hitPath.setAttribute(
+            "cursor",
+            "grab"
+        );
+
+
+        /*
+           Arrastar a própria conexão.
+        */
+
+        setupEdgeDragging(
+            hitPath,
+            edge
+        );
+
+
+        /*
+           Clique na área da conexão.
+        */
+
+        hitPath.addEventListener(
+            "click",
+            event => {
+
+                event.stopPropagation();
+
+                selectEdge(edge.id);
+
+            }
+        );
+
+
+        svg.appendChild(
+            hitPath
+        );
+
+
+        /*
+           ==================================================
            RÓTULO
+           ==================================================
         */
 
         if (edge.label) {
-
-            /*
-               Posição real no meio da curva.
-            */
 
             const labelX =
                 0.25 * sx +
                 0.50 * cx +
                 0.25 * tx;
 
+
             const labelY =
                 0.25 * sy +
                 0.50 * cy +
                 0.25 * ty;
 
-
-            /*
-               Grupo para criar fundo branco
-               atrás do símbolo.
-            */
 
             const group =
                 document.createElementNS(
@@ -669,7 +880,7 @@ function renderEdges() {
 
 
             /*
-               Fundo branco
+               Fundo branco.
             */
 
             const background =
@@ -681,22 +892,22 @@ function renderEdges() {
 
             background.setAttribute(
                 "x",
-                labelX - 12
+                labelX - 13
             );
 
             background.setAttribute(
                 "y",
-                labelY - 13
+                labelY - 14
             );
 
             background.setAttribute(
                 "width",
-                24
+                26
             );
 
             background.setAttribute(
                 "height",
-                20
+                21
             );
 
             background.setAttribute(
@@ -709,14 +920,9 @@ function renderEdges() {
                 "white"
             );
 
-            background.setAttribute(
-                "stroke",
-                "#ffffff"
-            );
-
 
             /*
-               Símbolo
+               Símbolo.
             */
 
             const label =
@@ -760,13 +966,34 @@ function renderEdges() {
             );
 
 
-            svg.appendChild(group);
+            /*
+               Clicar no símbolo também
+               seleciona a conexão.
+            */
+
+            group.addEventListener(
+                "click",
+                event => {
+
+                    event.stopPropagation();
+
+                    selectEdge(edge.id);
+
+                }
+            );
+
+
+            svg.appendChild(
+                group
+            );
 
         }
 
 
         /*
+           ==================================================
            PONTO DE CONTROLE
+           ==================================================
         */
 
         if (
@@ -809,7 +1036,9 @@ function renderEdges() {
             );
 
 
-            svg.appendChild(handle);
+            svg.appendChild(
+                handle
+            );
 
         }
 
@@ -819,6 +1048,134 @@ function renderEdges() {
 /* =========================================================
    MOVER CURVA
    ========================================================= */
+
+function setupEdgeDragging(
+    element,
+    edge
+) {
+
+    let dragging = false;
+
+
+    element.addEventListener(
+        "mousedown",
+        event => {
+
+            /*
+               Somente botão esquerdo.
+            */
+
+            if (event.button !== 0) {
+                return;
+            }
+
+
+            dragging = true;
+
+            selectEdge(edge.id);
+
+
+            event.preventDefault();
+
+            event.stopPropagation();
+
+        }
+    );
+
+
+    document.addEventListener(
+        "mousemove",
+        event => {
+
+            if (!dragging) {
+                return;
+            }
+
+
+            const rect =
+                canvas.getBoundingClientRect();
+
+
+            const mouseX =
+                event.clientX -
+                rect.left;
+
+            const mouseY =
+                event.clientY -
+                rect.top;
+
+
+            /*
+               Estados de origem e destino.
+            */
+
+            const source =
+                machine.nodes.find(
+                    n => n.id === edge.from
+                );
+
+            const target =
+                machine.nodes.find(
+                    n => n.id === edge.to
+                );
+
+
+            if (!source || !target) {
+                return;
+            }
+
+
+            /*
+               Centro atual da conexão.
+            */
+
+            const sx =
+                source.x + 65;
+
+            const sy =
+                source.y + 30;
+
+            const tx =
+                target.x + 65;
+
+            const ty =
+                target.y + 30;
+
+
+            const middleX =
+                (sx + tx) / 2;
+
+            const middleY =
+                (sy + ty) / 2;
+
+
+            /*
+               Move a curva.
+            */
+
+            edge.bendOffsetX =
+                mouseX - middleX;
+
+            edge.bendOffsetY =
+                mouseY - middleY;
+
+
+            renderEdges();
+
+        }
+    );
+
+
+    document.addEventListener(
+        "mouseup",
+        () => {
+
+            dragging = false;
+
+        }
+    );
+
+}
 
 function setupEdgeHandle(
     handle,
@@ -855,10 +1212,6 @@ function setupEdgeHandle(
                 canvas.getBoundingClientRect();
 
 
-            /*
-               Posição atual do mouse
-            */
-
             const mouseX =
                 event.clientX -
                 rect.left;
@@ -867,10 +1220,6 @@ function setupEdgeHandle(
                 event.clientY -
                 rect.top;
 
-
-            /*
-               Localiza os dois estados
-            */
 
             const source =
                 machine.nodes.find(
@@ -887,10 +1236,6 @@ function setupEdgeHandle(
                 return;
             }
 
-
-            /*
-               Centro atual da conexão
-            */
 
             const sx =
                 source.x + 65;
@@ -911,15 +1256,6 @@ function setupEdgeHandle(
             const middleY =
                 (sy + ty) / 2;
 
-
-            /*
-               Guarda somente o deslocamento
-               em relação ao centro.
-
-               Assim, quando os estados
-               forem movidos, a curva continua
-               acompanhando-os.
-            */
 
             edge.bendOffsetX =
                 mouseX - middleX;
