@@ -440,25 +440,48 @@ function createEdge(from, to) {
         label = "ε";
     }
 
-    /*
-       A curva agora guarda um deslocamento
-       em relação ao meio da conexão.
 
-       Assim, se os estados forem movidos,
-       a curva acompanha os estados.
+    /*
+       Verifica quantas conexões já existem
+       entre os mesmos dois estados.
     */
 
-    const sourceX = source.x + 65;
-    const sourceY = source.y + 30;
+    const parallelEdges =
+        machine.edges.filter(
+            e =>
+                e.from === from &&
+                e.to === to
+        );
 
-    const targetX = target.x + 65;
-    const targetY = target.y + 30;
 
-    const middleX =
-        (sourceX + targetX) / 2;
+    /*
+       Se houver várias conexões entre os
+       mesmos estados, elas ficam separadas.
 
-    const middleY =
-        (sourceY + targetY) / 2;
+       Primeira: acima
+       Segunda: abaixo
+       Terceira: mais acima
+       Quarta: mais abaixo
+    */
+
+    const index =
+        parallelEdges.length;
+
+
+    let bendOffsetY = -45;
+
+    if (index === 1) {
+        bendOffsetY = 45;
+    }
+
+    if (index === 2) {
+        bendOffsetY = -90;
+    }
+
+    if (index === 3) {
+        bendOffsetY = 90;
+    }
+
 
     const edge = {
 
@@ -469,14 +492,12 @@ function createEdge(from, to) {
 
         label,
 
-        /*
-           Curva padrão para cima.
-        */
-
         bendOffsetX: 0,
-        bendOffsetY: -50
+
+        bendOffsetY
 
     };
+
 
     machine.edges.push(edge);
 
@@ -517,7 +538,7 @@ function renderEdges() {
 
 
         /*
-           Centro dos estados
+           CENTRO DOS ESTADOS
         */
 
         const sx =
@@ -534,11 +555,7 @@ function renderEdges() {
 
 
         /*
-           Calcula novamente o ponto
-           de controle da curva.
-
-           Isso faz a curva acompanhar
-           os estados quando eles são movidos.
+           CENTRO DA CONEXÃO
         */
 
         const middleX =
@@ -547,6 +564,10 @@ function renderEdges() {
         const middleY =
             (sy + ty) / 2;
 
+
+        /*
+           PONTO DE CONTROLE
+        */
 
         const cx =
             middleX +
@@ -558,7 +579,7 @@ function renderEdges() {
 
 
         /*
-           CURVA
+           LINHA / CURVA
         */
 
         const path =
@@ -610,21 +631,14 @@ function renderEdges() {
 
 
         /*
-           RÓTULO DA CONEXÃO
-
-           O texto é colocado no meio
-           da própria curva.
-
-           Para uma curva quadrática,
-           o ponto central é:
-
-           B(0.5) =
-           0.25 P0 +
-           0.5 P1 +
-           0.25 P2
+           RÓTULO
         */
 
         if (edge.label) {
+
+            /*
+               Posição real no meio da curva.
+            */
 
             const labelX =
                 0.25 * sx +
@@ -637,6 +651,74 @@ function renderEdges() {
                 0.25 * ty;
 
 
+            /*
+               Grupo para criar fundo branco
+               atrás do símbolo.
+            */
+
+            const group =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "g"
+                );
+
+
+            group.classList.add(
+                "edge-element"
+            );
+
+
+            /*
+               Fundo branco
+            */
+
+            const background =
+                document.createElementNS(
+                    "http://www.w3.org/2000/svg",
+                    "rect"
+                );
+
+
+            background.setAttribute(
+                "x",
+                labelX - 12
+            );
+
+            background.setAttribute(
+                "y",
+                labelY - 13
+            );
+
+            background.setAttribute(
+                "width",
+                24
+            );
+
+            background.setAttribute(
+                "height",
+                20
+            );
+
+            background.setAttribute(
+                "rx",
+                4
+            );
+
+            background.setAttribute(
+                "fill",
+                "white"
+            );
+
+            background.setAttribute(
+                "stroke",
+                "#ffffff"
+            );
+
+
+            /*
+               Símbolo
+            */
+
             const label =
                 document.createElementNS(
                     "http://www.w3.org/2000/svg",
@@ -645,7 +727,6 @@ function renderEdges() {
 
 
             label.classList.add(
-                "edge-element",
                 "edge-label"
             );
 
@@ -655,12 +736,10 @@ function renderEdges() {
                 labelX
             );
 
-
             label.setAttribute(
                 "y",
-                labelY - 8
+                labelY + 3
             );
-
 
             label.setAttribute(
                 "text-anchor",
@@ -672,16 +751,22 @@ function renderEdges() {
                 edge.label;
 
 
-            svg.appendChild(label);
+            group.appendChild(
+                background
+            );
+
+            group.appendChild(
+                label
+            );
+
+
+            svg.appendChild(group);
 
         }
 
 
         /*
-           PONTO DE CONTROLE DA CURVA
-
-           Aparece somente quando
-           a conexão está selecionada.
+           PONTO DE CONTROLE
         */
 
         if (
@@ -707,12 +792,10 @@ function renderEdges() {
                 cx
             );
 
-
             handle.setAttribute(
                 "cy",
                 cy
             );
-
 
             handle.setAttribute(
                 "r",
@@ -733,7 +816,6 @@ function renderEdges() {
     });
 
 }
-
 /* =========================================================
    MOVER CURVA
    ========================================================= */
@@ -1986,8 +2068,8 @@ function loadExample() {
 
         type: "aceita",
 
-        x: 700,
-        y: 170
+        x: 720,
+        y: 150
 
     };
 
@@ -1998,8 +2080,8 @@ function loadExample() {
 
         type: "rejeita",
 
-        x: 700,
-        y: 370
+        x: 720,
+        y: 390
 
     };
 
@@ -2027,15 +2109,15 @@ function loadExample() {
 
         label: "",
 
-        bendX: 170,
+        bendOffsetX: 0,
 
-        bendY: 270
+        bendOffsetY: 0
 
     });
 
 
     /*
-       X ← X# → TESTE
+       X ← X# → X ← ler(X)
     */
 
     machine.edges.push({
@@ -2048,9 +2130,9 @@ function loadExample() {
 
         label: "",
 
-        bendX: 365,
+        bendOffsetX: 0,
 
-        bendY: 270
+        bendOffsetY: 0
 
     });
 
@@ -2069,51 +2151,9 @@ function loadExample() {
 
         label: "0",
 
-        bendX: 580,
+        bendOffsetX: 0,
 
-        bendY: 190
-
-    });
-
-
-    /*
-       TESTE → 1 → REJEITA
-    */
-
-    machine.edges.push({
-
-        id: machine.nextEdgeId++,
-
-        from: test.id,
-
-        to: reject.id,
-
-        label: "1",
-
-        bendX: 580,
-
-        bendY: 350
-
-    });
-
-
-    /*
-       TESTE → # → REJEITA
-    */
-
-    machine.edges.push({
-
-        id: machine.nextEdgeId++,
-
-        from: test.id,
-
-        to: reject.id,
-
-        label: "#",
-
-        bendX: 590,
-
-        bendY: 420
+        bendOffsetY: -45
 
     });
 
@@ -2132,9 +2172,51 @@ function loadExample() {
 
         label: "ε",
 
-        bendX: 590,
+        bendOffsetX: 0,
 
-        bendY: 120
+        bendOffsetY: 45
+
+    });
+
+
+    /*
+       TESTE → 1 → REJEITA
+    */
+
+    machine.edges.push({
+
+        id: machine.nextEdgeId++,
+
+        from: test.id,
+
+        to: reject.id,
+
+        label: "1",
+
+        bendOffsetX: 0,
+
+        bendOffsetY: -45
+
+    });
+
+
+    /*
+       TESTE → # → REJEITA
+    */
+
+    machine.edges.push({
+
+        id: machine.nextEdgeId++,
+
+        from: test.id,
+
+        to: reject.id,
+
+        label: "#",
+
+        bendOffsetX: 0,
+
+        bendOffsetY: 45
 
     });
 
