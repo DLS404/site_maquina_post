@@ -1,16 +1,5 @@
 /* =========================================================
    SIMULADOR DE MÁQUINA DE POST
-   Versão simplificada:
-   - Uma máquina por vez
-   - Sem zoom
-   - Sem pan
-   - Nós arrastáveis
-   - Conexões editáveis
-   ========================================================= */
-
-
-/* =========================================================
-   ESTADO DA MÁQUINA
    ========================================================= */
 
 const machine = {
@@ -33,8 +22,6 @@ const machine = {
     currentNode: null,
 
     running: false,
-    paused: false,
-
     timer: null
 
 };
@@ -62,16 +49,18 @@ const modeText =
 
 
 /* =========================================================
-   TIPOS DE NÓ
+   NOMES DOS TIPOS
    ========================================================= */
 
 const nodeNames = {
 
     partida: "Partida",
 
-    teste: "X ← ler(X)",
+    marcador: "X ← X#",
 
     atribuicao: "X ← Xs",
+
+    teste: "X ← ler(X)",
 
     aceita: "ACEITA",
 
@@ -95,9 +84,7 @@ function addNode(type, x = 100, y = 100) {
         x,
         y,
 
-        symbol: "#",
-
-        name: nodeNames[type]
+        symbol: "#"
 
     };
 
@@ -106,11 +93,12 @@ function addNode(type, x = 100, y = 100) {
     render();
 
     selectNode(node.id);
+
 }
 
 
 /* =========================================================
-   RENDERIZAÇÃO
+   RENDER
    ========================================================= */
 
 function render() {
@@ -131,29 +119,41 @@ function renderNodes() {
 
     machine.nodes.forEach(node => {
 
-        const element = document.createElement("div");
+        const element =
+            document.createElement("div");
 
         element.className =
             `node ${node.type}`;
 
         if (machine.selectedNode === node.id) {
+
             element.classList.add("selected");
+
         }
 
         if (machine.currentNode === node.id) {
+
             element.classList.add("current");
+
         }
 
         element.dataset.id = node.id;
 
-        element.style.left = node.x + "px";
-        element.style.top = node.y + "px";
+        element.style.left =
+            node.x + "px";
 
-        element.textContent = getNodeLabel(node);
+        element.style.top =
+            node.y + "px";
+
+        element.textContent =
+            getNodeLabel(node);
 
         nodesContainer.appendChild(element);
 
-        setupNodeDragging(element, node);
+        setupNodeDragging(
+            element,
+            node
+        );
 
     });
 
@@ -161,7 +161,7 @@ function renderNodes() {
 
 
 /* =========================================================
-   TEXTO DO NÓ
+   TEXTO DOS NÓS
    ========================================================= */
 
 function getNodeLabel(node) {
@@ -170,6 +170,9 @@ function getNodeLabel(node) {
 
         case "partida":
             return "PARTIDA";
+
+        case "marcador":
+            return "X ← X#";
 
         case "teste":
             return "X ← ler(X)";
@@ -202,85 +205,101 @@ function setupNodeDragging(element, node) {
     let offsetX = 0;
     let offsetY = 0;
 
-    element.addEventListener("mousedown", event => {
 
-        if (machine.connectionMode) {
+    element.addEventListener(
+        "mousedown",
+        event => {
 
-            event.stopPropagation();
+            if (machine.connectionMode) {
 
-            handleConnectionClick(node);
+                event.stopPropagation();
 
-            return;
+                handleConnectionClick(node);
+
+                return;
+
+            }
+
+            if (event.button !== 0) {
+                return;
+            }
+
+            dragging = true;
+
+            const rect =
+                canvas.getBoundingClientRect();
+
+            offsetX =
+                event.clientX -
+                rect.left -
+                node.x;
+
+            offsetY =
+                event.clientY -
+                rect.top -
+                node.y;
+
+            selectNode(node.id);
+
+            event.preventDefault();
 
         }
+    );
 
-        if (event.button !== 0) {
-            return;
+
+    document.addEventListener(
+        "mousemove",
+        event => {
+
+            if (!dragging) {
+                return;
+            }
+
+            const rect =
+                canvas.getBoundingClientRect();
+
+            node.x =
+                event.clientX -
+                rect.left -
+                offsetX;
+
+            node.y =
+                event.clientY -
+                rect.top -
+                offsetY;
+
+            node.x =
+                Math.max(
+                    5,
+                    Math.min(
+                        canvas.clientWidth - 150,
+                        node.x
+                    )
+                );
+
+            node.y =
+                Math.max(
+                    5,
+                    Math.min(
+                        canvas.clientHeight - 75,
+                        node.y
+                    )
+                );
+
+            render();
+
         }
-
-        dragging = true;
-
-        const rect =
-            canvas.getBoundingClientRect();
-
-        offsetX =
-            event.clientX -
-            rect.left -
-            node.x;
-
-        offsetY =
-            event.clientY -
-            rect.top -
-            node.y;
-
-        selectNode(node.id);
-
-        event.preventDefault();
-
-    });
+    );
 
 
-    document.addEventListener("mousemove", event => {
+    document.addEventListener(
+        "mouseup",
+        () => {
 
-        if (!dragging) {
-            return;
+            dragging = false;
+
         }
-
-        const rect =
-            canvas.getBoundingClientRect();
-
-        node.x =
-            event.clientX -
-            rect.left -
-            offsetX;
-
-        node.y =
-            event.clientY -
-            rect.top -
-            offsetY;
-
-        node.x =
-            Math.max(5, Math.min(
-                canvas.clientWidth - 140,
-                node.x
-            ));
-
-        node.y =
-            Math.max(5, Math.min(
-                canvas.clientHeight - 70,
-                node.y
-            ));
-
-        render();
-
-    });
-
-
-    document.addEventListener("mouseup", () => {
-
-        dragging = false;
-
-    });
+    );
 
 }
 
@@ -292,7 +311,6 @@ function setupNodeDragging(element, node) {
 function selectNode(id) {
 
     machine.selectedNode = id;
-
     machine.selectedEdge = null;
 
     showNodeProperties();
@@ -309,7 +327,6 @@ function selectNode(id) {
 function selectEdge(id) {
 
     machine.selectedEdge = id;
-
     machine.selectedNode = null;
 
     showEdgeProperties();
@@ -320,7 +337,7 @@ function selectEdge(id) {
 
 
 /* =========================================================
-   CONEXÕES
+   MODO CONEXÃO
    ========================================================= */
 
 function startConnectionMode() {
@@ -330,19 +347,24 @@ function startConnectionMode() {
 
     machine.connectionStart = null;
 
+
     if (machine.connectionMode) {
 
         modeText.textContent =
-            "Modo: conectando... clique em dois nós";
+            "Modo: conectando — clique em dois nós";
 
-        modeText.classList.add("connection-mode");
+        modeText.classList.add(
+            "connection-mode"
+        );
 
     } else {
 
         modeText.textContent =
             "Modo: seleção";
 
-        modeText.classList.remove("connection-mode");
+        modeText.classList.remove(
+            "connection-mode"
+        );
 
     }
 
@@ -350,7 +372,7 @@ function startConnectionMode() {
 
 
 /* =========================================================
-   CLIQUE PARA CONECTAR
+   CONEXÃO
    ========================================================= */
 
 function handleConnectionClick(node) {
@@ -367,7 +389,11 @@ function handleConnectionClick(node) {
 
     }
 
-    if (machine.connectionStart === node.id) {
+
+    if (
+        machine.connectionStart ===
+        node.id
+    ) {
 
         machine.connectionStart = null;
 
@@ -378,6 +404,7 @@ function handleConnectionClick(node) {
 
     }
 
+
     createEdge(
         machine.connectionStart,
         node.id
@@ -386,7 +413,7 @@ function handleConnectionClick(node) {
     machine.connectionStart = null;
 
     modeText.textContent =
-        "Conexão criada. Clique em outros nós.";
+        "Conexão criada.";
 
 }
 
@@ -398,22 +425,44 @@ function handleConnectionClick(node) {
 function createEdge(from, to) {
 
     const source =
-        machine.nodes.find(n => n.id === from);
+        machine.nodes.find(
+            n => n.id === from
+        );
 
     const target =
-        machine.nodes.find(n => n.id === to);
+        machine.nodes.find(
+            n => n.id === to
+        );
+
+
+    let label = "";
+
+
+    /*
+       Teste precisa ter rótulo.
+
+       Os rótulos possíveis serão:
+       símbolos do alfabeto,
+       #
+       ε
+    */
+
+    if (source.type === "teste") {
+
+        label = "ε";
+
+    }
+
 
     const edge = {
 
         id: machine.nextEdgeId++,
 
         from,
+
         to,
 
-        label:
-            source.type === "teste"
-                ? "ε"
-                : "",
+        label,
 
         bendX:
             (source.x + target.x) / 2,
@@ -422,6 +471,7 @@ function createEdge(from, to) {
             (source.y + target.y) / 2 - 50
 
     };
+
 
     machine.edges.push(edge);
 
@@ -436,8 +486,12 @@ function createEdge(from, to) {
 
 function renderEdges() {
 
-    svg.querySelectorAll(".edge-element")
-        .forEach(el => el.remove());
+    svg.querySelectorAll(
+        ".edge-element"
+    ).forEach(
+        el => el.remove()
+    );
+
 
     machine.edges.forEach(edge => {
 
@@ -451,9 +505,11 @@ function renderEdges() {
                 n => n.id === edge.to
             );
 
+
         if (!source || !target) {
             return;
         }
+
 
         const sx =
             source.x + 65;
@@ -466,6 +522,7 @@ function renderEdges() {
 
         const ty =
             target.y + 30;
+
 
         const cx =
             edge.bendX;
@@ -480,21 +537,32 @@ function renderEdges() {
                 "path"
             );
 
+
         path.classList.add(
             "edge-element",
             "edge"
         );
 
-        if (machine.selectedEdge === edge.id) {
-            path.classList.add("selected");
+
+        if (
+            machine.selectedEdge ===
+            edge.id
+        ) {
+
+            path.classList.add(
+                "selected"
+            );
+
         }
 
-        const d =
+
+        path.setAttribute(
+            "d",
             `M ${sx} ${sy}
              Q ${cx} ${cy}
-               ${tx} ${ty}`;
+               ${tx} ${ty}`
+        );
 
-        path.setAttribute("d", d);
 
         path.addEventListener(
             "click",
@@ -510,8 +578,6 @@ function renderEdges() {
 
         svg.appendChild(path);
 
-
-        /* LABEL */
 
         if (edge.label) {
 
@@ -549,9 +615,10 @@ function renderEdges() {
         }
 
 
-        /* HANDLE DA CURVA */
-
-        if (machine.selectedEdge === edge.id) {
+        if (
+            machine.selectedEdge ===
+            edge.id
+        ) {
 
             const handle =
                 document.createElementNS(
@@ -594,12 +661,16 @@ function renderEdges() {
 
 
 /* =========================================================
-   MOVER CURVA DA CONEXÃO
+   MOVER CURVA
    ========================================================= */
 
-function setupEdgeHandle(handle, edge) {
+function setupEdgeHandle(
+    handle,
+    edge
+) {
 
     let dragging = false;
+
 
     handle.addEventListener(
         "mousedown",
@@ -663,6 +734,7 @@ function showNodeProperties() {
             n => n.id === machine.selectedNode
         );
 
+
     if (!node) {
 
         properties.innerHTML =
@@ -679,7 +751,7 @@ function showNodeProperties() {
 
         <div class="property">
 
-            <label>Tipo</label>
+            <label>Instrução</label>
 
             <input
                 value="${nodeNames[node.type]}"
@@ -690,20 +762,53 @@ function showNodeProperties() {
     `;
 
 
+    /*
+       X ← X# é fixo.
+    */
+
+    if (node.type === "marcador") {
+
+        html += `
+
+            <div class="property">
+
+                <small>
+                    Acrescenta o símbolo #
+                    ao final da fila.
+                </small>
+
+            </div>
+
+        `;
+
+    }
+
+
+    /*
+       X ← Xs permite escolher
+       o símbolo acrescentado.
+    */
+
     if (node.type === "atribuicao") {
 
         html += `
 
             <div class="property">
 
-                <label>Símbolo a adicionar</label>
+                <label>
+                    Símbolo acrescentado
+                </label>
 
                 <select id="nodeSymbol">
 
                     <option value="#">#</option>
+
                     <option value="0">0</option>
+
                     <option value="1">1</option>
+
                     <option value="a">a</option>
+
                     <option value="b">b</option>
 
                 </select>
@@ -725,7 +830,10 @@ function showNodeProperties() {
                 "nodeSymbol"
             );
 
-        select.value = node.symbol;
+
+        select.value =
+            node.symbol;
+
 
         select.addEventListener(
             "change",
@@ -755,6 +863,7 @@ function showEdgeProperties() {
             e => e.id === machine.selectedEdge
         );
 
+
     if (!edge) {
 
         properties.innerHTML =
@@ -771,12 +880,14 @@ function showEdgeProperties() {
 
         <div class="property">
 
-            <label>Rótulo da conexão</label>
+            <label>
+                Rótulo da conexão
+            </label>
 
             <input
                 id="edgeLabel"
                 value="${edge.label}"
-                placeholder="Ex.: 0, 1 ou ε">
+                placeholder="0, 1, # ou ε">
 
         </div>
 
@@ -814,15 +925,19 @@ function showEdgeProperties() {
 
 function deleteSelected() {
 
-    if (machine.selectedNode !== null) {
+    if (
+        machine.selectedNode !== null
+    ) {
 
         const id =
             machine.selectedNode;
+
 
         machine.nodes =
             machine.nodes.filter(
                 n => n.id !== id
             );
+
 
         machine.edges =
             machine.edges.filter(
@@ -831,12 +946,16 @@ function deleteSelected() {
                     e.to !== id
             );
 
-        machine.selectedNode = null;
+
+        machine.selectedNode =
+            null;
+
 
         properties.innerHTML =
             `<p class="empty">
                 Selecione uma operação ou conexão.
              </p>`;
+
 
         render();
 
@@ -845,7 +964,9 @@ function deleteSelected() {
     }
 
 
-    if (machine.selectedEdge !== null) {
+    if (
+        machine.selectedEdge !== null
+    ) {
 
         deleteSelectedEdge();
 
@@ -860,21 +981,31 @@ function deleteSelected() {
 
 function deleteSelectedEdge() {
 
-    if (machine.selectedEdge === null) {
+    if (
+        machine.selectedEdge === null
+    ) {
+
         return;
+
     }
+
 
     machine.edges =
         machine.edges.filter(
-            e => e.id !== machine.selectedEdge
+            e =>
+                e.id !==
+                machine.selectedEdge
         );
 
+
     machine.selectedEdge = null;
+
 
     properties.innerHTML =
         `<p class="empty">
             Selecione uma operação ou conexão.
          </p>`;
+
 
     render();
 
@@ -882,7 +1013,7 @@ function deleteSelectedEdge() {
 
 
 /* =========================================================
-   TECLA DELETE
+   DELETE / ESC
    ========================================================= */
 
 document.addEventListener(
@@ -897,32 +1028,45 @@ document.addEventListener(
             const active =
                 document.activeElement;
 
+
             if (
                 active.tagName === "INPUT" ||
                 active.tagName === "SELECT"
             ) {
+
                 return;
+
             }
+
 
             deleteSelected();
 
         }
 
+
         if (event.key === "Escape") {
 
-            machine.connectionMode = false;
+            machine.connectionMode =
+                false;
 
-            machine.connectionStart = null;
+            machine.connectionStart =
+                null;
+
+            machine.selectedNode =
+                null;
+
+            machine.selectedEdge =
+                null;
+
 
             modeText.textContent =
                 "Modo: seleção";
+
 
             modeText.classList.remove(
                 "connection-mode"
             );
 
-            machine.selectedNode = null;
-            machine.selectedEdge = null;
 
             render();
 
@@ -933,7 +1077,7 @@ document.addEventListener(
 
 
 /* =========================================================
-   FILA
+   DEFINIR ENTRADA
    ========================================================= */
 
 function setInputWord() {
@@ -943,20 +1087,33 @@ function setInputWord() {
             "inputWord"
         );
 
+
     machine.inputWord =
         input.value.trim();
+
+
+    /*
+       IMPORTANTE:
+       A entrada começa somente
+       com a palavra.
+
+       O # será acrescentado
+       pela instrução X ← X#.
+    */
 
     machine.queue =
         [...machine.inputWord];
 
-    machine.currentNode = null;
+
+    machine.currentNode =
+        null;
+
 
     updateQueue();
 
+
     executionStatus.textContent =
         "Entrada definida.";
-
-    render();
 
 }
 
@@ -967,13 +1124,17 @@ function setInputWord() {
 
 function updateQueue() {
 
-    if (machine.queue.length === 0) {
+    if (
+        machine.queue.length === 0
+    ) {
 
-        queueElement.textContent = "ε";
+        queueElement.textContent =
+            "ε";
 
         return;
 
     }
+
 
     queueElement.textContent =
         machine.queue.join("");
@@ -982,7 +1143,7 @@ function updateQueue() {
 
 
 /* =========================================================
-   VALIDAR MÁQUINA
+   VALIDAR
    ========================================================= */
 
 function validateMachine() {
@@ -993,82 +1154,67 @@ function validateMachine() {
 
     const starts =
         machine.nodes.filter(
-            n => n.type === "partida"
+            n =>
+                n.type === "partida"
         );
+
 
     if (starts.length === 0) {
 
         errors.push(
-            "A máquina precisa ter uma instrução de partida."
+            "A máquina precisa possuir uma instrução de partida."
         );
 
     }
+
 
     if (starts.length > 1) {
 
         errors.push(
-            "A máquina deve possuir apenas uma instrução de partida."
+            "A máquina deve possuir somente uma instrução de partida."
         );
 
     }
 
 
-    const terminals =
+    const markers =
         machine.nodes.filter(
             n =>
-                n.type === "aceita" ||
-                n.type === "rejeita"
+                n.type === "marcador"
         );
 
-    if (terminals.length === 0) {
+
+    if (markers.length === 0) {
 
         warnings.push(
-            "A máquina não possui uma instrução de parada."
+            "A máquina não possui a instrução X ← X#."
         );
 
     }
 
 
-    machine.nodes.forEach(node => {
-
-        if (
-            node.type !== "aceita" &&
-            node.type !== "rejeita"
-        ) {
-
-            const outgoing =
-                machine.edges.filter(
-                    e => e.from === node.id
-                );
-
-            if (outgoing.length === 0) {
-
-                warnings.push(
-                    `O nó "${getNodeLabel(node)}" não possui saída.`
-                );
-
-            }
-
-        }
-
-    });
+    const tests =
+        machine.nodes.filter(
+            n =>
+                n.type === "teste"
+        );
 
 
-    machine.edges.forEach(edge => {
+    tests.forEach(test => {
 
-        const source =
-            machine.nodes.find(
-                n => n.id === edge.from
+        const outgoing =
+            machine.edges.filter(
+                e =>
+                    e.from === test.id
             );
 
+
         if (
-            source &&
-            source.type === "teste" &&
-            !edge.label
+            outgoing.length === 0
         ) {
 
             warnings.push(
-                "Existe uma conexão de teste sem rótulo."
+                "Um teste não possui nenhuma saída."
             );
 
         }
@@ -1080,16 +1226,16 @@ function validateMachine() {
 
         validationResult.innerHTML =
             `<div class="success">
-                ✓ Máquina estruturalmente válida.
+                ✓ Estrutura básica válida.
              </div>`;
 
     } else {
 
         validationResult.innerHTML =
             `<div class="error">
-                ${errors.map(
-                    e => "✗ " + e
-                ).join("<br>")}
+                ${errors
+                    .map(e => "✗ " + e)
+                    .join("<br>")}
              </div>`;
 
     }
@@ -1098,10 +1244,13 @@ function validateMachine() {
     if (warnings.length > 0) {
 
         validationResult.innerHTML +=
-            `<div class="warning" style="margin-top:8px;">
-                ${warnings.map(
-                    w => "⚠ " + w
-                ).join("<br>")}
+            `<div class="warning"
+                  style="margin-top:8px;">
+
+                ${warnings
+                    .map(w => "⚠ " + w)
+                    .join("<br>")}
+
              </div>`;
 
     }
@@ -1110,68 +1259,99 @@ function validateMachine() {
 
 
 /* =========================================================
-   ENCONTRAR PRÓXIMO NÓ
+   PRÓXIMO NÓ
    ========================================================= */
 
-function getNextNode(currentNode, symbol) {
+function getNextNode(
+    currentNode,
+    symbol
+) {
 
     const outgoing =
         machine.edges.filter(
-            e => e.from === currentNode.id
+            e =>
+                e.from ===
+                currentNode.id
         );
 
 
-    if (currentNode.type === "teste") {
+    /*
+       TESTE
+    */
 
-        let edge =
+    if (
+        currentNode.type ===
+        "teste"
+    ) {
+
+        const edge =
             outgoing.find(
-                e => e.label === symbol
+                e =>
+                    e.label ===
+                    symbol
             );
 
-        if (!edge) {
-
-            edge =
-                outgoing.find(
-                    e => e.label === "ε" &&
-                    symbol === "ε"
-                );
-
-        }
 
         if (!edge) {
+
             return null;
+
         }
+
 
         return machine.nodes.find(
-            n => n.id === edge.to
+            n =>
+                n.id === edge.to
         );
 
     }
 
 
-    if (outgoing.length === 0) {
+    /*
+       Outros nós possuem
+       somente uma saída.
+    */
+
+    if (
+        outgoing.length === 0
+    ) {
+
         return null;
+
     }
 
+
     return machine.nodes.find(
-        n => n.id === outgoing[0].to
+        n =>
+            n.id ===
+            outgoing[0].to
     );
 
 }
 
 
 /* =========================================================
-   EXECUTAR UM PASSO
+   EXECUTAR PASSO
    ========================================================= */
 
 function stepMachine() {
 
-    if (machine.currentNode === null) {
+    /*
+       PRIMEIRO PASSO:
+       entra na PARTIDA.
+    */
+
+    if (
+        machine.currentNode === null
+    ) {
 
         const start =
             machine.nodes.find(
-                n => n.type === "partida"
+                n =>
+                    n.type ===
+                    "partida"
             );
+
 
         if (!start) {
 
@@ -1182,8 +1362,10 @@ function stepMachine() {
 
         }
 
+
         machine.currentNode =
             start.id;
+
 
         render();
 
@@ -1194,17 +1376,27 @@ function stepMachine() {
 
     const current =
         machine.nodes.find(
-            n => n.id === machine.currentNode
+            n =>
+                n.id ===
+                machine.currentNode
         );
 
+
     if (!current) {
+
         return false;
+
     }
 
 
-    /* ACEITA */
+    /*
+       ACEITA
+    */
 
-    if (current.type === "aceita") {
+    if (
+        current.type ===
+        "aceita"
+    ) {
 
         executionStatus.textContent =
             "✓ Palavra aceita.";
@@ -1216,9 +1408,14 @@ function stepMachine() {
     }
 
 
-    /* REJEITA */
+    /*
+       REJEITA
+    */
 
-    if (current.type === "rejeita") {
+    if (
+        current.type ===
+        "rejeita"
+    ) {
 
         executionStatus.textContent =
             "✗ Palavra rejeitada.";
@@ -1230,29 +1427,79 @@ function stepMachine() {
     }
 
 
-    let symbol =
-        machine.queue.length > 0
-            ? machine.queue[0]
-            : "ε";
+    /*
+       X ← X#
+
+       Este é o ponto importante:
+       o # é colocado no final
+       da fila.
+    */
+
+    if (
+        current.type ===
+        "marcador"
+    ) {
+
+        machine.queue.push("#");
+
+        updateQueue();
+
+    }
 
 
-    /* TESTE */
+    /*
+       X ← Xs
+    */
 
-    if (current.type === "teste") {
+    if (
+        current.type ===
+        "atribuicao"
+    ) {
 
-        if (machine.queue.length > 0) {
+        machine.queue.push(
+            current.symbol
+        );
 
-            machine.queue.shift();
+        updateQueue();
+
+    }
+
+
+    /*
+       X ← ler(X)
+    */
+
+    if (
+        current.type ===
+        "teste"
+    ) {
+
+        let symbol = "ε";
+
+
+        /*
+           Se houver símbolo,
+           lê o primeiro e remove.
+        */
+
+        if (
+            machine.queue.length > 0
+        ) {
+
+            symbol =
+                machine.queue.shift();
 
             updateQueue();
 
         }
+
 
         const next =
             getNextNode(
                 current,
                 symbol
             );
+
 
         if (!next) {
 
@@ -1265,8 +1512,10 @@ function stepMachine() {
 
         }
 
+
         machine.currentNode =
             next.id;
+
 
         render();
 
@@ -1275,29 +1524,22 @@ function stepMachine() {
     }
 
 
-    /* ATRIBUIÇÃO */
-
-    if (current.type === "atribuicao") {
-
-        machine.queue.push(
-            current.symbol
-        );
-
-        updateQueue();
-
-    }
-
+    /*
+       Para partida, X←X# e X←Xs
+       buscamos a próxima instrução.
+    */
 
     const next =
         getNextNode(
             current,
-            symbol
+            ""
         );
+
 
     if (!next) {
 
         executionStatus.textContent =
-            "A máquina não possui uma próxima instrução.";
+            "A instrução não possui uma saída.";
 
         machine.running = false;
 
@@ -1308,6 +1550,7 @@ function stepMachine() {
 
     machine.currentNode =
         next.id;
+
 
     render();
 
@@ -1323,11 +1566,14 @@ function stepMachine() {
 function executeMachine() {
 
     if (machine.running) {
+
         return;
+
     }
 
+
     machine.running = true;
-    machine.paused = false;
+
 
     executionStatus.textContent =
         "Executando...";
@@ -1335,49 +1581,67 @@ function executeMachine() {
 
     let steps = 0;
 
+
     machine.timer =
-        setInterval(() => {
+        setInterval(
+            () => {
 
-            if (!machine.running) {
-                return;
-            }
+                if (
+                    !machine.running
+                ) {
 
-            const result =
-                stepMachine();
+                    return;
 
-            steps++;
-
-            if (!result) {
-
-                clearInterval(
-                    machine.timer
-                );
-
-                machine.timer = null;
-
-                machine.running = false;
-
-                return;
-
-            }
+                }
 
 
-            if (steps > 10000) {
+                const result =
+                    stepMachine();
 
-                clearInterval(
-                    machine.timer
-                );
 
-                machine.timer = null;
+                steps++;
 
-                machine.running = false;
 
-                executionStatus.textContent =
-                    "⚠ Limite de passos atingido. Possível loop infinito.";
+                if (!result) {
 
-            }
+                    clearInterval(
+                        machine.timer
+                    );
 
-        }, 500);
+                    machine.timer =
+                        null;
+
+                    machine.running =
+                        false;
+
+                    return;
+
+                }
+
+
+                if (
+                    steps >= 10000
+                ) {
+
+                    clearInterval(
+                        machine.timer
+                    );
+
+                    machine.timer =
+                        null;
+
+                    machine.running =
+                        false;
+
+
+                    executionStatus.textContent =
+                        "⚠ Limite de passos atingido. Possível loop infinito.";
+
+                }
+
+            },
+            500
+        );
 
 }
 
@@ -1388,7 +1652,9 @@ function executeMachine() {
 
 function pauseMachine() {
 
-    machine.running = false;
+    machine.running =
+        false;
+
 
     if (machine.timer) {
 
@@ -1396,9 +1662,11 @@ function pauseMachine() {
             machine.timer
         );
 
-        machine.timer = null;
+        machine.timer =
+            null;
 
     }
+
 
     executionStatus.textContent =
         "Execução pausada.";
@@ -1407,22 +1675,28 @@ function pauseMachine() {
 
 
 /* =========================================================
-   RESETAR EXECUÇÃO
+   RESETAR
    ========================================================= */
 
 function resetExecution() {
 
     pauseMachine();
 
+
     machine.queue =
         [...machine.inputWord];
 
-    machine.currentNode = null;
+
+    machine.currentNode =
+        null;
+
 
     updateQueue();
 
+
     executionStatus.textContent =
         "Máquina parada.";
+
 
     render();
 
@@ -1437,40 +1711,59 @@ function newMachine() {
 
     pauseMachine();
 
+
     machine.nodes = [];
     machine.edges = [];
+
 
     machine.nextNodeId = 1;
     machine.nextEdgeId = 1;
 
+
     machine.selectedNode = null;
     machine.selectedEdge = null;
 
-    machine.connectionMode = false;
-    machine.connectionStart = null;
 
-    machine.currentNode = null;
+    machine.connectionMode =
+        false;
 
-    machine.inputWord = "";
+    machine.connectionStart =
+        null;
+
+
+    machine.currentNode =
+        null;
+
+
+    machine.inputWord =
+        "";
+
     machine.queue = [];
+
 
     document.getElementById(
         "inputWord"
     ).value = "";
+
 
     properties.innerHTML =
         `<p class="empty">
             Selecione uma operação ou conexão.
          </p>`;
 
-    validationResult.innerHTML = "";
+
+    validationResult.innerHTML =
+        "";
+
 
     modeText.textContent =
         "Modo: seleção";
 
+
     modeText.classList.remove(
         "connection-mode"
     );
+
 
     updateQueue();
 
@@ -1480,23 +1773,29 @@ function newMachine() {
 
 
 /* =========================================================
-   EXEMPLO DE MÁQUINA
+   EXEMPLO CORRETO
    =========================================================
 
-   Exemplo simples:
+   Máquina:
 
    PARTIDA
-      ↓
-   TESTE
-    ↙   ↘
-   0     1
-    ↓     ↓
-   TESTE  TESTE
-      ...
+      |
+   X ← X#
+      |
+   X ← ler(X)
+     / | \
+    0  1  #
+    |  |  |
+   ... ... ...
 
-   Para deixar o exemplo mais simples,
-   usamos uma máquina que lê o primeiro
-   símbolo e aceita se for 0.
+
+   Exemplo:
+   entrada = 1010
+
+   Depois de X ← X#:
+
+   1010#
+
    ========================================================= */
 
 function loadExample() {
@@ -1510,10 +1809,20 @@ function loadExample() {
 
         type: "partida",
 
-        x: 100,
-        y: 270,
+        x: 80,
+        y: 270
 
-        symbol: "#"
+    };
+
+
+    const marker = {
+
+        id: machine.nextNodeId++,
+
+        type: "marcador",
+
+        x: 260,
+        y: 270
 
     };
 
@@ -1524,10 +1833,8 @@ function loadExample() {
 
         type: "teste",
 
-        x: 300,
-        y: 270,
-
-        symbol: "#"
+        x: 470,
+        y: 270
 
     };
 
@@ -1538,10 +1845,8 @@ function loadExample() {
 
         type: "aceita",
 
-        x: 550,
-        y: 180,
-
-        symbol: "#"
+        x: 700,
+        y: 170
 
     };
 
@@ -1552,21 +1857,24 @@ function loadExample() {
 
         type: "rejeita",
 
-        x: 550,
-        y: 360,
-
-        symbol: "#"
+        x: 700,
+        y: 370
 
     };
 
 
     machine.nodes.push(
         start,
+        marker,
         test,
         accept,
         reject
     );
 
+
+    /*
+       PARTIDA → X ← X#
+    */
 
     machine.edges.push({
 
@@ -1574,16 +1882,41 @@ function loadExample() {
 
         from: start.id,
 
-        to: test.id,
+        to: marker.id,
 
         label: "",
 
-        bendX: 200,
+        bendX: 170,
 
         bendY: 270
 
     });
 
+
+    /*
+       X ← X# → TESTE
+    */
+
+    machine.edges.push({
+
+        id: machine.nextEdgeId++,
+
+        from: marker.id,
+
+        to: test.id,
+
+        label: "",
+
+        bendX: 365,
+
+        bendY: 270
+
+    });
+
+
+    /*
+       TESTE → 0 → ACEITA
+    */
 
     machine.edges.push({
 
@@ -1595,12 +1928,16 @@ function loadExample() {
 
         label: "0",
 
-        bendX: 425,
+        bendX: 580,
 
-        bendY: 200
+        bendY: 190
 
     });
 
+
+    /*
+       TESTE → 1 → REJEITA
+    */
 
     machine.edges.push({
 
@@ -1612,29 +1949,62 @@ function loadExample() {
 
         label: "1",
 
-        bendX: 425,
+        bendX: 580,
 
-        bendY: 340
+        bendY: 350
+
+    });
+
+
+    /*
+       TESTE → # → REJEITA
+    */
+
+    machine.edges.push({
+
+        id: machine.nextEdgeId++,
+
+        from: test.id,
+
+        to: reject.id,
+
+        label: "#",
+
+        bendX: 590,
+
+        bendY: 420
+
+    });
+
+
+    /*
+       TESTE → ε → ACEITA
+    */
+
+    machine.edges.push({
+
+        id: machine.nextEdgeId++,
+
+        from: test.id,
+
+        to: accept.id,
+
+        label: "ε",
+
+        bendX: 590,
+
+        bendY: 120
 
     });
 
 
     render();
 
-    setInputExample();
-
-}
-
-
-/* =========================================================
-   INPUT DO EXEMPLO
-   ========================================================= */
-
-function setInputExample() {
 
     document.getElementById(
         "inputWord"
     ).value = "0";
+
 
     setInputWord();
 
@@ -1642,7 +2012,7 @@ function setInputExample() {
 
 
 /* =========================================================
-   CLIQUE FORA DOS NÓS
+   CLIQUE NO FUNDO
    ========================================================= */
 
 canvas.addEventListener(
@@ -1654,14 +2024,18 @@ canvas.addEventListener(
             event.target === nodesContainer
         ) {
 
-            machine.selectedNode = null;
+            machine.selectedNode =
+                null;
 
-            machine.selectedEdge = null;
+            machine.selectedEdge =
+                null;
+
 
             properties.innerHTML =
                 `<p class="empty">
                     Selecione uma operação ou conexão.
                  </p>`;
+
 
             render();
 
