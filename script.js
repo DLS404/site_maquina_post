@@ -2,6 +2,11 @@
    SIMULADOR DE MÁQUINA DE POST
    ========================================================= */
 
+
+/* =========================================================
+   ESTRUTURA DA MÁQUINA
+   ========================================================= */
+
 const machine = {
 
     nodes: [],
@@ -25,6 +30,119 @@ const machine = {
     timer: null
 
 };
+
+
+/* =========================================================
+   HISTÓRICO - CTRL + Z
+   ========================================================= */
+
+const undoHistory = [];
+
+const MAX_UNDO = 50;
+
+let historyLocked = false;
+
+
+function saveHistory() {
+
+    if (historyLocked) {
+        return;
+    }
+
+    undoHistory.push({
+
+        nodes: JSON.parse(
+            JSON.stringify(machine.nodes)
+        ),
+
+        edges: JSON.parse(
+            JSON.stringify(machine.edges)
+        ),
+
+        nextNodeId:
+            machine.nextNodeId,
+
+        nextEdgeId:
+            machine.nextEdgeId
+
+    });
+
+
+    if (
+        undoHistory.length >
+        MAX_UNDO
+    ) {
+
+        undoHistory.shift();
+
+    }
+
+}
+
+
+function undo() {
+
+    if (
+        undoHistory.length === 0
+    ) {
+
+        return;
+
+    }
+
+
+    const previous =
+        undoHistory.pop();
+
+
+    historyLocked = true;
+
+
+    machine.nodes =
+        JSON.parse(
+            JSON.stringify(
+                previous.nodes
+            )
+        );
+
+
+    machine.edges =
+        JSON.parse(
+            JSON.stringify(
+                previous.edges
+            )
+        );
+
+
+    machine.nextNodeId =
+        previous.nextNodeId;
+
+
+    machine.nextEdgeId =
+        previous.nextEdgeId;
+
+
+    machine.selectedNode =
+        null;
+
+    machine.selectedEdge =
+        null;
+
+
+    properties.innerHTML =
+        `
+        <p class="empty">
+            Selecione uma operação ou conexão.
+        </p>
+        `;
+
+
+    render();
+
+
+    historyLocked = false;
+
+}
 
 
 /* =========================================================
@@ -57,28 +175,7 @@ const modeText =
 
 
 /* =========================================================
-   NOMES DOS TIPOS
-   ========================================================= */
-
-const nodeNames = {
-
-    partida: "Partida",
-
-    marcador: "X ← X#",
-
-    atribuicao: "X ← Xs",
-
-    teste: "X ← ler(X)",
-
-    aceita: "ACEITA",
-
-    rejeita: "REJEITA"
-
-};
-
-
-/* =========================================================
-   CONFIGURAÇÃO DAS CONEXÕES
+   TAMANHO PADRÃO DOS ESTADOS
    ========================================================= */
 
 const NODE_WIDTH = 130;
@@ -86,16 +183,72 @@ const NODE_HEIGHT = 60;
 
 
 /* =========================================================
-   UTILITÁRIOS
+   TAMANHOS DOS ESTADOS CIRCULARES
+   =========================================================
+
+   Esses valores precisam acompanhar o CSS.
+
+   PARTIDA é menor que ACEITA/REJEITA.
+   ========================================================= */
+
+function getNodeSize(node) {
+
+    switch (node.type) {
+
+        case "partida":
+
+            return {
+
+                width: 82,
+                height: 52
+
+            };
+
+
+        case "aceita":
+        case "rejeita":
+
+            return {
+
+                width: 120,
+                height: 54
+
+            };
+
+
+        default:
+
+            return {
+
+                width: NODE_WIDTH,
+                height: NODE_HEIGHT
+
+            };
+
+    }
+
+}
+
+
+/* =========================================================
+   CENTRO DO ESTADO
    ========================================================= */
 
 function nodeCenter(node) {
 
+    const size =
+        getNodeSize(node);
+
+
     return {
 
-        x: node.x + NODE_WIDTH / 2,
+        x:
+            node.x +
+            size.width / 2,
 
-        y: node.y + NODE_HEIGHT / 2
+        y:
+            node.y +
+            size.height / 2
 
     };
 
@@ -103,13 +256,7 @@ function nodeCenter(node) {
 
 
 /* =========================================================
-   PONTO DE ENTRADA/SAÍDA DA CONEXÃO
-   =========================================================
-
-   Faz a linha começar na borda do estado em vez de
-   começar exatamente no centro.
-
-   Isso deixa a seta visualmente correta.
+   PONTO EXATO DA BORDA
    ========================================================= */
 
 function getConnectionPoint(
@@ -118,17 +265,23 @@ function getConnectionPoint(
     targetY
 ) {
 
+    const size =
+        getNodeSize(node);
+
+
     const cx =
         node.x +
-        NODE_WIDTH / 2;
+        size.width / 2;
+
 
     const cy =
         node.y +
-        NODE_HEIGHT / 2;
+        size.height / 2;
 
 
     const dx =
         targetX - cx;
+
 
     const dy =
         targetY - cy;
@@ -140,17 +293,18 @@ function getConnectionPoint(
     ) {
 
         return {
+
             x: cx,
             y: cy
+
         };
 
     }
 
 
-    /*
-       Nós circulares:
-       PARTIDA, ACEITA e REJEITA.
-    */
+    /* =====================================================
+       ESTADOS OVAIS
+       ===================================================== */
 
     if (
         node.type === "partida" ||
@@ -159,16 +313,32 @@ function getConnectionPoint(
     ) {
 
         const rx =
-            NODE_WIDTH / 2;
+            size.width / 2;
+
 
         const ry =
-            NODE_HEIGHT / 2;
+            size.height / 2;
 
 
         const denominator =
             Math.sqrt(
-                (dx * dx) / (rx * rx) +
-                (dy * dy) / (ry * ry)
+
+                (
+                    dx * dx
+                ) /
+                (
+                    rx * rx
+                )
+
+                +
+
+                (
+                    dy * dy
+                ) /
+                (
+                    ry * ry
+                )
+
             );
 
 
@@ -187,22 +357,26 @@ function getConnectionPoint(
     }
 
 
-    /*
-       Nós retangulares.
-    */
+    /* =====================================================
+       ESTADOS RETANGULARES
+       ===================================================== */
 
     const halfW =
-        NODE_WIDTH / 2;
+        size.width / 2;
+
 
     const halfH =
-        NODE_HEIGHT / 2;
+        size.height / 2;
 
 
     const scaleX =
-        Math.abs(dx) / halfW;
+        Math.abs(dx) /
+        halfW;
+
 
     const scaleY =
-        Math.abs(dy) / halfH;
+        Math.abs(dy) /
+        halfH;
 
 
     const scale =
@@ -228,41 +402,47 @@ function getConnectionPoint(
 
 
 /* =========================================================
-   PONTO CENTRAL DA CONEXÃO
+   GEOMETRIA DAS CONEXÕES
    ========================================================= */
 
 function getEdgeGeometry(edge) {
 
     const source =
         machine.nodes.find(
-            n => n.id === edge.from
+            n =>
+                n.id ===
+                edge.from
         );
+
 
     const target =
         machine.nodes.find(
-            n => n.id === edge.to
+            n =>
+                n.id ===
+                edge.to
         );
 
 
-    if (!source || !target) {
+    if (
+        !source ||
+        !target
+    ) {
+
         return null;
+
     }
 
 
-    /*
-       Primeiro usamos o centro dos estados
-       para descobrir a direção.
-    */
-
     const sourceCenter =
         nodeCenter(source);
+
 
     const targetCenter =
         nodeCenter(target);
 
 
     /*
-       Ponto de entrada/saída.
+       Borda real do estado de origem.
     */
 
     const start =
@@ -273,6 +453,10 @@ function getEdgeGeometry(edge) {
         );
 
 
+    /*
+       Borda real do estado de destino.
+    */
+
     const end =
         getConnectionPoint(
             target,
@@ -282,7 +466,7 @@ function getEdgeGeometry(edge) {
 
 
     /*
-       Centro geométrico.
+       Centro da conexão.
     */
 
     const middleX =
@@ -300,49 +484,25 @@ function getEdgeGeometry(edge) {
 
 
     /*
-       Compatibilidade com versões antigas.
-       Se algum edge antigo ainda tiver bendX/bendY,
-       convertemos para bendOffset.
+       Compatibilidade com conexões antigas.
     */
 
     if (
-        edge.bendOffsetX === undefined
+        edge.bendOffsetX ===
+        undefined
     ) {
 
-        if (
-            edge.bendX !== undefined
-        ) {
-
-            edge.bendOffsetX =
-                edge.bendX -
-                middleX;
-
-        } else {
-
-            edge.bendOffsetX = 0;
-
-        }
+        edge.bendOffsetX = 0;
 
     }
 
 
     if (
-        edge.bendOffsetY === undefined
+        edge.bendOffsetY ===
+        undefined
     ) {
 
-        if (
-            edge.bendY !== undefined
-        ) {
-
-            edge.bendOffsetY =
-                edge.bendY -
-                middleY;
-
-        } else {
-
-            edge.bendOffsetY = 0;
-
-        }
+        edge.bendOffsetY = 0;
 
     }
 
@@ -363,11 +523,9 @@ function getEdgeGeometry(edge) {
     return {
 
         source,
-
         target,
 
         start,
-
         end,
 
         control
@@ -378,7 +536,7 @@ function getEdgeGeometry(edge) {
 
 
 /* =========================================================
-   ADICIONAR NÓ
+   ADICIONAR ESTADO
    ========================================================= */
 
 function addNode(
@@ -386,6 +544,9 @@ function addNode(
     x = 100,
     y = 100
 ) {
+
+    saveHistory();
+
 
     const node = {
 
@@ -398,22 +559,29 @@ function addNode(
 
         y,
 
-        symbol: "#"
+        symbol:
+            "#"
 
     };
 
 
-    machine.nodes.push(node);
+    machine.nodes.push(
+        node
+    );
+
 
     render();
 
-    selectNode(node.id);
+
+    selectNode(
+        node.id
+    );
 
 }
 
 
 /* =========================================================
-   RENDER GERAL
+   RENDER
    ========================================================= */
 
 function render() {
@@ -426,12 +594,13 @@ function render() {
 
 
 /* =========================================================
-   RENDERIZAR NÓS
+   RENDER DOS ESTADOS
    ========================================================= */
 
 function renderNodes() {
 
-    nodesContainer.innerHTML = "";
+    nodesContainer.innerHTML =
+        "";
 
 
     machine.nodes.forEach(
@@ -484,7 +653,9 @@ function renderNodes() {
 
 
             element.textContent =
-                getNodeLabel(node);
+                getNodeLabel(
+                    node
+                );
 
 
             nodesContainer.appendChild(
@@ -504,32 +675,47 @@ function renderNodes() {
 
 
 /* =========================================================
-   TEXTO DOS NÓS
+   TEXTO DOS ESTADOS
    ========================================================= */
 
 function getNodeLabel(node) {
 
-    switch (node.type) {
+    switch (
+        node.type
+    ) {
 
         case "partida":
+
             return "PARTIDA";
 
+
         case "marcador":
+
             return "X ← X#";
 
+
         case "teste":
+
             return "X ← ler(X)";
 
+
         case "atribuicao":
+
             return `X ← X${node.symbol}`;
 
+
         case "aceita":
+
             return "ACEITA";
 
+
         case "rejeita":
+
             return "REJEITA";
 
+
         default:
+
             return "";
 
     }
@@ -538,7 +724,7 @@ function getNodeLabel(node) {
 
 
 /* =========================================================
-   ARRASTAR NÓ
+   ARRASTAR ESTADOS
    ========================================================= */
 
 function setupNodeDragging(
@@ -546,20 +732,21 @@ function setupNodeDragging(
     node
 ) {
 
-    let dragging = false;
+    let dragging =
+        false;
 
-    let offsetX = 0;
-    let offsetY = 0;
+
+    let offsetX =
+        0;
+
+
+    let offsetY =
+        0;
 
 
     element.addEventListener(
         "mousedown",
         event => {
-
-            /*
-               Se estiver no modo conexão,
-               o clique serve para conectar.
-            */
 
             if (
                 machine.connectionMode
@@ -567,9 +754,11 @@ function setupNodeDragging(
 
                 event.stopPropagation();
 
+
                 handleConnectionClick(
                     node
                 );
+
 
                 return;
 
@@ -585,7 +774,11 @@ function setupNodeDragging(
             }
 
 
-            dragging = true;
+            saveHistory();
+
+
+            dragging =
+                true;
 
 
             const rect =
@@ -604,7 +797,9 @@ function setupNodeDragging(
                 node.y;
 
 
-            selectNode(node.id);
+            selectNode(
+                node.id
+            );
 
 
             event.preventDefault();
@@ -617,7 +812,9 @@ function setupNodeDragging(
         event => {
 
             if (!dragging) {
+
                 return;
+
             }
 
 
@@ -637,13 +834,19 @@ function setupNodeDragging(
                 offsetY;
 
 
+            const size =
+                getNodeSize(node);
+
+
             node.x =
                 Math.max(
                     5,
+
                     Math.min(
                         canvas.clientWidth -
-                        NODE_WIDTH -
+                        size.width -
                         5,
+
                         node.x
                     )
                 );
@@ -652,19 +855,16 @@ function setupNodeDragging(
             node.y =
                 Math.max(
                     5,
+
                     Math.min(
                         canvas.clientHeight -
-                        NODE_HEIGHT -
+                        size.height -
                         5,
+
                         node.y
                     )
                 );
 
-
-            /*
-               Renderiza tudo.
-               As conexões acompanham automaticamente.
-            */
 
             render();
 
@@ -674,7 +874,8 @@ function setupNodeDragging(
     const upHandler =
         () => {
 
-            dragging = false;
+            dragging =
+                false;
 
         };
 
@@ -694,7 +895,7 @@ function setupNodeDragging(
 
 
 /* =========================================================
-   SELECIONAR NÓ
+   SELECIONAR ESTADO
    ========================================================= */
 
 function selectNode(id) {
@@ -702,10 +903,13 @@ function selectNode(id) {
     machine.selectedNode =
         id;
 
+
     machine.selectedEdge =
         null;
 
+
     showNodeProperties();
+
 
     render();
 
@@ -721,10 +925,13 @@ function selectEdge(id) {
     machine.selectedEdge =
         id;
 
+
     machine.selectedNode =
         null;
 
+
     showEdgeProperties();
+
 
     render();
 
@@ -773,7 +980,7 @@ function startConnectionMode() {
 
 
 /* =========================================================
-   CLICAR EM NÓ NO MODO CONEXÃO
+   CRIAR CONEXÃO
    ========================================================= */
 
 function handleConnectionClick(
@@ -840,42 +1047,49 @@ function createEdge(
     to
 ) {
 
+    saveHistory();
+
+
     const source =
         machine.nodes.find(
-            n => n.id === from
+            n =>
+                n.id ===
+                from
         );
+
 
     const target =
         machine.nodes.find(
-            n => n.id === to
+            n =>
+                n.id ===
+                to
         );
 
 
-    if (!source || !target) {
-        return;
-    }
-
-
-    let label = "";
-
-
-    /*
-       Teste recebe ε inicialmente.
-    */
-
     if (
-        source.type === "teste"
+        !source ||
+        !target
     ) {
 
-        label = "ε";
+        return;
 
     }
 
 
-    /*
-       Descobre quantas conexões paralelas
-       já existem entre os mesmos estados.
-    */
+    let label =
+        "";
+
+
+    if (
+        source.type ===
+        "teste"
+    ) {
+
+        label =
+            "ε";
+
+    }
+
 
     const parallelEdges =
         machine.edges.filter(
@@ -890,31 +1104,39 @@ function createEdge(
 
 
     /*
-       Se houver duas conexões para o mesmo
-       destino, uma fica para cima e outra
-       para baixo.
+       Curvas pequenas.
     */
 
-    let bendOffsetY = -45;
+    let bendOffsetY =
+        0;
 
 
-    if (index === 1) {
+    if (
+        index === 1
+    ) {
 
-        bendOffsetY = 45;
-
-    }
-
-
-    if (index === 2) {
-
-        bendOffsetY = -90;
+        bendOffsetY =
+            12;
 
     }
 
 
-    if (index === 3) {
+    if (
+        index === 2
+    ) {
 
-        bendOffsetY = 90;
+        bendOffsetY =
+            -22;
+
+    }
+
+
+    if (
+        index === 3
+    ) {
+
+        bendOffsetY =
+            22;
 
     }
 
@@ -930,28 +1152,36 @@ function createEdge(
 
         label,
 
-        bendOffsetX: 0,
+        bendOffsetX:
+            0,
 
         bendOffsetY
 
     };
 
 
-    machine.edges.push(edge);
+    machine.edges.push(
+        edge
+    );
 
-    selectEdge(edge.id);
+
+    selectEdge(
+        edge.id
+    );
 
 }
 
 
 /* =========================================================
-   CRIAR ARROW MARKER
+   MARCADOR DAS SETAS
    ========================================================= */
 
 function createArrowMarker() {
 
     let defs =
-        svg.querySelector("defs");
+        svg.querySelector(
+            "defs"
+        );
 
 
     if (!defs) {
@@ -978,7 +1208,9 @@ function createArrowMarker() {
 
 
     if (marker) {
+
         return marker;
+
     }
 
 
@@ -1046,7 +1278,7 @@ function createArrowMarker() {
 
     arrow.setAttribute(
         "fill",
-        "#555"
+        "#222"
     );
 
 
@@ -1066,13 +1298,14 @@ function createArrowMarker() {
 
 
 /* =========================================================
-   RENDERIZAR CONEXÕES
+   RENDER DAS CONEXÕES
    ========================================================= */
 
 function renderEdges() {
 
     /*
-       Remove elementos antigos.
+       Remove apenas elementos das conexões.
+       O <defs> e o marcador continuam intactos.
     */
 
     svg.querySelectorAll(
@@ -1083,26 +1316,22 @@ function renderEdges() {
     );
 
 
-    /*
-       Cria a ponta da seta.
-    */
-
     createArrowMarker();
 
-
-    /*
-       Cada conexão.
-    */
 
     machine.edges.forEach(
         edge => {
 
             const geometry =
-                getEdgeGeometry(edge);
+                getEdgeGeometry(
+                    edge
+                );
 
 
             if (!geometry) {
+
                 return;
+
             }
 
 
@@ -1113,15 +1342,9 @@ function renderEdges() {
             } = geometry;
 
 
-            /*
-               ==================================================
-               ÁREA INVISÍVEL DE CLIQUE
-               ==================================================
-
-               Essa é a parte que permite ARRastar a conexão.
-
-               Ela é desenhada antes da linha visível.
-            */
+            /* =================================================
+               HITBOX INVISÍVEL
+               ================================================= */
 
             const hitPath =
                 document.createElementNS(
@@ -1138,9 +1361,11 @@ function renderEdges() {
 
             hitPath.setAttribute(
                 "d",
-                `M ${start.x} ${start.y}
-                 Q ${control.x} ${control.y}
-                   ${end.x} ${end.y}`
+                `
+                M ${start.x} ${start.y}
+                Q ${control.x} ${control.y}
+                  ${end.x} ${end.y}
+                `
             );
 
 
@@ -1183,11 +1408,9 @@ function renderEdges() {
             );
 
 
-            /*
-               ==================================================
+            /* =================================================
                LINHA VISÍVEL
-               ==================================================
-            */
+               ================================================= */
 
             const path =
                 document.createElementNS(
@@ -1216,14 +1439,16 @@ function renderEdges() {
 
             path.setAttribute(
                 "d",
-                `M ${start.x} ${start.y}
-                 Q ${control.x} ${control.y}
-                   ${end.x} ${end.y}`
+                `
+                M ${start.x} ${start.y}
+                Q ${control.x} ${control.y}
+                  ${end.x} ${end.y}
+                `
             );
 
 
             /*
-               AQUI ESTÁ A SETA.
+               A SETA.
             */
 
             path.setAttribute(
@@ -1232,15 +1457,27 @@ function renderEdges() {
             );
 
 
-            /*
-               A linha visual não captura
-               o mouse. Quem captura é
-               hitPath.
-            */
-
             path.setAttribute(
                 "pointer-events",
                 "none"
+            );
+
+
+            path.setAttribute(
+                "fill",
+                "none"
+            );
+
+
+            path.setAttribute(
+                "stroke",
+                "#555"
+            );
+
+
+            path.setAttribute(
+                "stroke-width",
+                "2"
             );
 
 
@@ -1249,28 +1486,24 @@ function renderEdges() {
             );
 
 
-            /*
-               ==================================================
+            /* =================================================
                RÓTULO
-               ==================================================
-            */
+               ================================================= */
 
-            if (edge.label) {
-
-                /*
-                   Posição exata no meio da curva.
-                */
+            if (
+                edge.label
+            ) {
 
                 const labelX =
-                    0.25 * start.x +
-                    0.50 * control.x +
-                    0.25 * end.x;
+                    0.20 * start.x +
+                    0.60 * control.x +
+                    0.20 * end.x;
 
 
                 const labelY =
-                    0.25 * start.y +
-                    0.50 * control.y +
-                    0.25 * end.y;
+                    0.20 * start.y +
+                    0.60 * control.y +
+                    0.20 * end.y;
 
 
                 const group =
@@ -1284,10 +1517,6 @@ function renderEdges() {
                     "edge-element"
                 );
 
-
-                /*
-                   Fundo branco.
-                */
 
                 const background =
                     document.createElementNS(
@@ -1332,10 +1561,6 @@ function renderEdges() {
                 );
 
 
-                /*
-                   Símbolo.
-                */
-
                 const label =
                     document.createElementNS(
                         "http://www.w3.org/2000/svg",
@@ -1370,11 +1595,6 @@ function renderEdges() {
                     edge.label;
 
 
-                /*
-                   O texto não bloqueia o
-                   arrasto da conexão.
-                */
-
                 group.setAttribute(
                     "pointer-events",
                     "none"
@@ -1398,11 +1618,9 @@ function renderEdges() {
             }
 
 
-            /*
-               ==================================================
+            /* =================================================
                PONTO DE CONTROLE
-               ==================================================
-            */
+               ================================================= */
 
             if (
                 machine.selectedEdge ===
@@ -1481,7 +1699,7 @@ function renderEdges() {
 
 
 /* =========================================================
-   ARRASTAR A PRÓPRIA CONEXÃO
+   ARRASTAR SETA
    ========================================================= */
 
 function setupEdgeDragging(
@@ -1489,7 +1707,8 @@ function setupEdgeDragging(
     edge
 ) {
 
-    let dragging = false;
+    let dragging =
+        false;
 
 
     element.addEventListener(
@@ -1505,28 +1724,25 @@ function setupEdgeDragging(
             }
 
 
-            dragging = true;
+            saveHistory();
 
 
-            /*
-               Seleciona a conexão.
-            */
+            dragging =
+                true;
+
 
             selectEdge(
                 edge.id
             );
 
 
-            /*
-               Captura o mouse.
-               Isso é importante para poder
-               continuar arrastando mesmo se o
-               cursor passar por cima de um estado.
-            */
+            try {
 
-            element.setPointerCapture(
-                event.pointerId
-            );
+                element.setPointerCapture(
+                    event.pointerId
+                );
+
+            } catch (_) {}
 
 
             element.style.cursor =
@@ -1546,7 +1762,9 @@ function setupEdgeDragging(
         event => {
 
             if (!dragging) {
+
                 return;
+
             }
 
 
@@ -1591,11 +1809,15 @@ function setupEdgeDragging(
 
 
             const sourceCenter =
-                nodeCenter(source);
+                nodeCenter(
+                    source
+                );
 
 
             const targetCenter =
-                nodeCenter(target);
+                nodeCenter(
+                    target
+                );
 
 
             const start =
@@ -1628,10 +1850,6 @@ function setupEdgeDragging(
                 ) / 2;
 
 
-            /*
-               A curva segue o mouse.
-            */
-
             edge.bendOffsetX =
                 mouseX -
                 middleX;
@@ -1652,7 +1870,8 @@ function setupEdgeDragging(
         "pointerup",
         event => {
 
-            dragging = false;
+            dragging =
+                false;
 
 
             try {
@@ -1675,7 +1894,9 @@ function setupEdgeDragging(
         "pointercancel",
         () => {
 
-            dragging = false;
+            dragging =
+                false;
+
 
             element.style.cursor =
                 "grab";
@@ -1687,7 +1908,7 @@ function setupEdgeDragging(
 
 
 /* =========================================================
-   ARRASTAR O PONTO DE CONTROLE
+   ARRASTAR PONTO DE CONTROLE
    ========================================================= */
 
 function setupEdgeHandle(
@@ -1695,7 +1916,8 @@ function setupEdgeHandle(
     edge
 ) {
 
-    let dragging = false;
+    let dragging =
+        false;
 
 
     handle.addEventListener(
@@ -1711,12 +1933,20 @@ function setupEdgeHandle(
             }
 
 
-            dragging = true;
+            saveHistory();
 
 
-            handle.setPointerCapture(
-                event.pointerId
-            );
+            dragging =
+                true;
+
+
+            try {
+
+                handle.setPointerCapture(
+                    event.pointerId
+                );
+
+            } catch (_) {}
 
 
             handle.style.cursor =
@@ -1736,7 +1966,9 @@ function setupEdgeHandle(
         event => {
 
             if (!dragging) {
+
                 return;
+
             }
 
 
@@ -1781,11 +2013,15 @@ function setupEdgeHandle(
 
 
             const sourceCenter =
-                nodeCenter(source);
+                nodeCenter(
+                    source
+                );
 
 
             const targetCenter =
-                nodeCenter(target);
+                nodeCenter(
+                    target
+                );
 
 
             const start =
@@ -1838,7 +2074,8 @@ function setupEdgeHandle(
         "pointerup",
         event => {
 
-            dragging = false;
+            dragging =
+                false;
 
 
             try {
@@ -1861,7 +2098,9 @@ function setupEdgeHandle(
         "pointercancel",
         () => {
 
-            dragging = false;
+            dragging =
+                false;
+
 
             handle.style.cursor =
                 "grab";
@@ -1873,7 +2112,7 @@ function setupEdgeHandle(
 
 
 /* =========================================================
-   PROPRIEDADES DO NÓ
+   PROPRIEDADES DO ESTADO
    ========================================================= */
 
 function showNodeProperties() {
@@ -1889,9 +2128,11 @@ function showNodeProperties() {
     if (!node) {
 
         properties.innerHTML =
-            `<p class="empty">
+            `
+            <p class="empty">
                 Selecione uma operação ou conexão.
-             </p>`;
+            </p>
+            `;
 
         return;
 
@@ -1902,7 +2143,9 @@ function showNodeProperties() {
 
         <div class="property">
 
-            <label>Instrução</label>
+            <label>
+                Instrução
+            </label>
 
             <input
                 value="${nodeNames[node.type]}"
@@ -1912,11 +2155,6 @@ function showNodeProperties() {
 
     `;
 
-
-    /*
-       X ← X#
-       É uma operação fixa.
-    */
 
     if (
         node.type ===
@@ -1939,10 +2177,6 @@ function showNodeProperties() {
     }
 
 
-    /*
-       X ← Xs
-    */
-
     if (
         node.type ===
         "atribuicao"
@@ -1956,7 +2190,8 @@ function showNodeProperties() {
                     Símbolo acrescentado
                 </label>
 
-                <select id="nodeSymbol">
+                <select
+                    id="nodeSymbol">
 
                     <option value="#">
                         #
@@ -2006,12 +2241,31 @@ function showNodeProperties() {
             node.symbol;
 
 
+        let oldValue =
+            node.symbol;
+
+
         select.addEventListener(
             "change",
             () => {
 
+                if (
+                    oldValue !==
+                    select.value
+                ) {
+
+                    saveHistory();
+
+                }
+
+
                 node.symbol =
                     select.value;
+
+
+                oldValue =
+                    node.symbol;
+
 
                 render();
 
@@ -2040,9 +2294,11 @@ function showEdgeProperties() {
     if (!edge) {
 
         properties.innerHTML =
-            `<p class="empty">
+            `
+            <p class="empty">
                 Selecione uma operação ou conexão.
-             </p>`;
+            </p>
+            `;
 
         return;
 
@@ -2064,8 +2320,9 @@ function showEdgeProperties() {
 
         </div>
 
+
         <button
-            onclick="deleteSelectedEdge()"
+            id="deleteEdgeButton"
             style="width:100%;">
 
             Excluir conexão
@@ -2081,14 +2338,49 @@ function showEdgeProperties() {
         );
 
 
+    let originalLabel =
+        edge.label;
+
+
     input.addEventListener(
-        "input",
-        event => {
+        "change",
+        () => {
+
+            if (
+                originalLabel !==
+                input.value
+            ) {
+
+                saveHistory();
+
+            }
+
 
             edge.label =
-                event.target.value;
+                input.value;
+
+
+            originalLabel =
+                edge.label;
+
 
             renderEdges();
+
+        }
+    );
+
+
+    const deleteButton =
+        document.getElementById(
+            "deleteEdgeButton"
+        );
+
+
+    deleteButton.addEventListener(
+        "click",
+        () => {
+
+            deleteSelectedEdge();
 
         }
     );
@@ -2102,9 +2394,17 @@ function showEdgeProperties() {
 
 function deleteSelected() {
 
-    /*
-       Excluir nó.
-    */
+    if (
+        machine.selectedNode !==
+            null ||
+        machine.selectedEdge !==
+            null
+    ) {
+
+        saveHistory();
+
+    }
+
 
     if (
         machine.selectedNode !==
@@ -2118,14 +2418,10 @@ function deleteSelected() {
         machine.nodes =
             machine.nodes.filter(
                 n =>
-                    n.id !== id
+                    n.id !==
+                    id
             );
 
-
-        /*
-           Remove todas as conexões
-           ligadas ao nó.
-        */
 
         machine.edges =
             machine.edges.filter(
@@ -2140,28 +2436,51 @@ function deleteSelected() {
 
 
         properties.innerHTML =
-            `<p class="empty">
+            `
+            <p class="empty">
                 Selecione uma operação ou conexão.
-             </p>`;
+            </p>
+            `;
 
 
         render();
+
 
         return;
 
     }
 
 
-    /*
-       Excluir conexão.
-    */
-
     if (
         machine.selectedEdge !==
         null
     ) {
 
-        deleteSelectedEdge();
+        const id =
+            machine.selectedEdge;
+
+
+        machine.edges =
+            machine.edges.filter(
+                e =>
+                    e.id !==
+                    id
+            );
+
+
+        machine.selectedEdge =
+            null;
+
+
+        properties.innerHTML =
+            `
+            <p class="empty">
+                Selecione uma operação ou conexão.
+            </p>
+            `;
+
+
+        render();
 
     }
 
@@ -2184,6 +2503,9 @@ function deleteSelectedEdge() {
     }
 
 
+    saveHistory();
+
+
     machine.edges =
         machine.edges.filter(
             e =>
@@ -2197,9 +2519,11 @@ function deleteSelectedEdge() {
 
 
     properties.innerHTML =
-        `<p class="empty">
+        `
+        <p class="empty">
             Selecione uma operação ou conexão.
-         </p>`;
+        </p>
+        `;
 
 
     render();
@@ -2215,35 +2539,70 @@ document.addEventListener(
     "keydown",
     event => {
 
-        /*
-           Delete.
-        */
+        /* CTRL + Z */
 
         if (
-            event.key ===
-            "Delete" ||
-            event.key ===
-            "Backspace"
+            event.ctrlKey &&
+            event.key.toLowerCase() ===
+                "z"
         ) {
 
             const active =
                 document.activeElement;
 
 
-            /*
-               Não apagar enquanto
-               estiver digitando em input.
-            */
+            if (
+                active &&
+                (
+                    active.tagName ===
+                        "INPUT" ||
+
+                    active.tagName ===
+                        "TEXTAREA"
+                )
+            ) {
+
+                return;
+
+            }
+
+
+            event.preventDefault();
+
+
+            undo();
+
+
+            return;
+
+        }
+
+
+        /* DELETE */
+
+        if (
+            event.key ===
+                "Delete" ||
+
+            event.key ===
+                "Backspace"
+        ) {
+
+            const active =
+                document.activeElement;
+
 
             if (
                 active &&
                 (
                     active.tagName ===
-                    "INPUT" ||
+                        "INPUT" ||
+
                     active.tagName ===
-                    "SELECT" ||
+                        "SELECT" ||
+
                     active.tagName ===
-                    "TEXTAREA"
+                        "TEXTAREA"
                 )
             ) {
 
@@ -2257,9 +2616,7 @@ document.addEventListener(
         }
 
 
-        /*
-           Escape.
-        */
+        /* ESC */
 
         if (
             event.key ===
@@ -2292,9 +2649,11 @@ document.addEventListener(
 
 
             properties.innerHTML =
-                `<p class="empty">
+                `
+                <p class="empty">
                     Selecione uma operação ou conexão.
-                 </p>`;
+                </p>
+                `;
 
 
             render();
@@ -2306,7 +2665,7 @@ document.addEventListener(
 
 
 /* =========================================================
-   DEFINIR PALAVRA DE ENTRADA
+   PALAVRA DE ENTRADA
    ========================================================= */
 
 function setInputWord() {
@@ -2320,20 +2679,6 @@ function setInputWord() {
     machine.inputWord =
         input.value.trim();
 
-
-    /*
-       IMPORTANTE:
-
-       A entrada começa sem #.
-
-       Exemplo:
-
-       1010
-
-       Depois X ← X#:
-
-       1010#
-    */
 
     machine.queue =
         [
@@ -2355,7 +2700,7 @@ function setInputWord() {
 
 
 /* =========================================================
-   ATUALIZAR FILA
+   FILA
    ========================================================= */
 
 function updateQueue() {
@@ -2367,6 +2712,7 @@ function updateQueue() {
 
         queueElement.textContent =
             "ε";
+
 
         return;
 
@@ -2380,18 +2726,18 @@ function updateQueue() {
 
 
 /* =========================================================
-   VALIDAR MÁQUINA
+   VALIDAÇÃO
    ========================================================= */
 
 function validateMachine() {
 
-    const errors = [];
-    const warnings = [];
+    const errors =
+        [];
 
 
-    /*
-       PARTIDA.
-    */
+    const warnings =
+        [];
+
 
     const starts =
         machine.nodes.filter(
@@ -2425,10 +2771,6 @@ function validateMachine() {
     }
 
 
-    /*
-       MARCADOR #.
-    */
-
     const markers =
         machine.nodes.filter(
             n =>
@@ -2448,10 +2790,6 @@ function validateMachine() {
 
     }
 
-
-    /*
-       TESTES.
-    */
 
     const tests =
         machine.nodes.filter(
@@ -2487,36 +2825,37 @@ function validateMachine() {
     );
 
 
-    /*
-       Resultado.
-    */
-
     if (
         errors.length ===
         0
     ) {
 
         validationResult.innerHTML =
-            `<div class="success">
+            `
+            <div class="success">
                 ✓ Estrutura básica válida.
-             </div>`;
+            </div>
+            `;
 
     } else {
 
         validationResult.innerHTML =
-            `<div class="error">
+            `
+            <div class="error">
+
                 ${
                     errors
                         .map(
                             e =>
-                                "✗ " +
-                                e
+                                "✗ " + e
                         )
                         .join(
                             "<br>"
                         )
                 }
-             </div>`;
+
+            </div>
+            `;
 
     }
 
@@ -2527,7 +2866,8 @@ function validateMachine() {
     ) {
 
         validationResult.innerHTML +=
-            `<div
+            `
+            <div
                 class="warning"
                 style="margin-top:8px;">
 
@@ -2535,15 +2875,15 @@ function validateMachine() {
                     warnings
                         .map(
                             w =>
-                                "⚠ " +
-                                w
+                                "⚠ " + w
                         )
                         .join(
                             "<br>"
                         )
                 }
 
-             </div>`;
+            </div>
+            `;
 
     }
 
@@ -2551,7 +2891,7 @@ function validateMachine() {
 
 
 /* =========================================================
-   ENCONTRAR PRÓXIMO NÓ
+   PRÓXIMO ESTADO
    ========================================================= */
 
 function getNextNode(
@@ -2566,15 +2906,6 @@ function getNextNode(
                 currentNode.id
         );
 
-
-    /*
-       TESTE:
-
-       X ← ler(X)
-
-       Escolhe a saída de acordo
-       com o símbolo lido.
-    */
 
     if (
         currentNode.type ===
@@ -2605,11 +2936,6 @@ function getNextNode(
     }
 
 
-    /*
-       Outros nós devem possuir
-       uma única saída.
-    */
-
     if (
         outgoing.length ===
         0
@@ -2635,11 +2961,6 @@ function getNextNode(
 
 function stepMachine() {
 
-    /*
-       Primeiro passo:
-       entra na PARTIDA.
-    */
-
     if (
         machine.currentNode ===
         null
@@ -2658,6 +2979,7 @@ function stepMachine() {
             executionStatus.textContent =
                 "Erro: não existe instrução de partida.";
 
+
             return false;
 
         }
@@ -2668,6 +2990,7 @@ function stepMachine() {
 
 
         render();
+
 
         return true;
 
@@ -2689,10 +3012,6 @@ function stepMachine() {
     }
 
 
-    /*
-       ACEITA.
-    */
-
     if (
         current.type ===
         "aceita"
@@ -2701,17 +3020,15 @@ function stepMachine() {
         executionStatus.textContent =
             "✓ Palavra aceita.";
 
+
         machine.running =
             false;
+
 
         return false;
 
     }
 
-
-    /*
-       REJEITA.
-    */
 
     if (
         current.type ===
@@ -2721,19 +3038,15 @@ function stepMachine() {
         executionStatus.textContent =
             "✗ Palavra rejeitada.";
 
+
         machine.running =
             false;
+
 
         return false;
 
     }
 
-
-    /*
-       X ← X#
-
-       Acrescenta # no FINAL.
-    */
 
     if (
         current.type ===
@@ -2750,12 +3063,6 @@ function stepMachine() {
     }
 
 
-    /*
-       X ← Xs
-
-       Acrescenta símbolo no final.
-    */
-
     if (
         current.type ===
         "atribuicao"
@@ -2770,12 +3077,6 @@ function stepMachine() {
 
     }
 
-
-    /*
-       X ← ler(X)
-
-       Remove o primeiro símbolo.
-    */
 
     if (
         current.type ===
@@ -2828,15 +3129,11 @@ function stepMachine() {
 
         render();
 
+
         return true;
 
     }
 
-
-    /*
-       Partida, marcador e atribuição
-       seguem a única saída.
-    */
 
     const next =
         getNextNode(
@@ -2866,6 +3163,7 @@ function stepMachine() {
 
     render();
 
+
     return true;
 
 }
@@ -2894,7 +3192,8 @@ function executeMachine() {
         "Executando...";
 
 
-    let steps = 0;
+    let steps =
+        0;
 
 
     machine.timer =
@@ -2936,10 +3235,6 @@ function executeMachine() {
 
                 }
 
-
-                /*
-                   Proteção contra loop infinito.
-                */
 
                 if (
                     steps >=
@@ -3042,13 +3337,29 @@ function newMachine() {
     pauseMachine();
 
 
-    machine.nodes = [];
+    if (
+        machine.nodes.length >
+            0 ||
+        machine.edges.length >
+            0
+    ) {
 
-    machine.edges = [];
+        saveHistory();
+
+    }
+
+
+    machine.nodes =
+        [];
+
+
+    machine.edges =
+        [];
 
 
     machine.nextNodeId =
         1;
+
 
     machine.nextEdgeId =
         1;
@@ -3057,12 +3368,14 @@ function newMachine() {
     machine.selectedNode =
         null;
 
+
     machine.selectedEdge =
         null;
 
 
     machine.connectionMode =
         false;
+
 
     machine.connectionStart =
         null;
@@ -3095,9 +3408,11 @@ function newMachine() {
 
 
     properties.innerHTML =
-        `<p class="empty">
+        `
+        <p class="empty">
             Selecione uma operação ou conexão.
-         </p>`;
+        </p>
+        `;
 
 
     validationResult.innerHTML =
@@ -3115,6 +3430,7 @@ function newMachine() {
 
     updateQueue();
 
+
     render();
 
 }
@@ -3122,28 +3438,60 @@ function newMachine() {
 
 /* =========================================================
    EXEMPLO
-   =========================================================
-
-   PARTIDA
-       ↓
-   X ← X#
-       ↓
-   X ← ler(X)
-
-   Saídas:
-
-       0 ──→ ACEITA
-       ε ──→ ACEITA
-
-       1 ──→ REJEITA
-       # ──→ REJEITA
-
    ========================================================= */
 
 function loadExample() {
 
-    newMachine();
+    if (
+        machine.nodes.length >
+            0 ||
+        machine.edges.length >
+            0
+    ) {
 
+        saveHistory();
+
+    }
+
+
+    pauseMachine();
+
+
+    machine.nodes =
+        [];
+
+
+    machine.edges =
+        [];
+
+
+    machine.nextNodeId =
+        1;
+
+
+    machine.nextEdgeId =
+        1;
+
+
+    machine.selectedNode =
+        null;
+
+
+    machine.selectedEdge =
+        null;
+
+
+    machine.currentNode =
+        null;
+
+
+    /*
+       =====================================================
+       PARTIDA
+       =====================================================
+
+       Agora ela fica mais próxima do X ← X#.
+    */
 
     const start = {
 
@@ -3154,13 +3502,19 @@ function loadExample() {
             "partida",
 
         x:
-            80,
+            30,
 
         y:
-            270
+            174
 
     };
 
+
+    /*
+       =====================================================
+       X ← X#
+       =====================================================
+    */
 
     const marker = {
 
@@ -3171,13 +3525,19 @@ function loadExample() {
             "marcador",
 
         x:
-            260,
+            140,
 
         y:
-            270
+            170
 
     };
 
+
+    /*
+       =====================================================
+       X ← ler(X)
+       =====================================================
+    */
 
     const test = {
 
@@ -3188,13 +3548,19 @@ function loadExample() {
             "teste",
 
         x:
-            470,
+            330,
 
         y:
-            270
+            170
 
     };
 
+
+    /*
+       =====================================================
+       ACEITA
+       =====================================================
+    */
 
     const accept = {
 
@@ -3205,13 +3571,19 @@ function loadExample() {
             "aceita",
 
         x:
-            720,
+            570,
 
         y:
-            150
+            60
 
     };
 
+
+    /*
+       =====================================================
+       REJEITA
+       =====================================================
+    */
 
     const reject = {
 
@@ -3222,10 +3594,10 @@ function loadExample() {
             "rejeita",
 
         x:
-            720,
+            570,
 
         y:
-            390
+            280
 
     };
 
@@ -3294,7 +3666,7 @@ function loadExample() {
 
 
     /*
-       TESTE → 0 → ACEITA
+       0 → ACEITA
     */
 
     machine.edges.push({
@@ -3315,13 +3687,13 @@ function loadExample() {
             0,
 
         bendOffsetY:
-            -45
+            12
 
     });
 
 
     /*
-       TESTE → ε → ACEITA
+       ε → ACEITA
     */
 
     machine.edges.push({
@@ -3342,13 +3714,13 @@ function loadExample() {
             0,
 
         bendOffsetY:
-            45
+            -12
 
     });
 
 
     /*
-       TESTE → 1 → REJEITA
+       1 → REJEITA
     */
 
     machine.edges.push({
@@ -3369,13 +3741,13 @@ function loadExample() {
             0,
 
         bendOffsetY:
-            -45
+            12
 
     });
 
 
     /*
-       TESTE → # → REJEITA
+       # → REJEITA
     */
 
     machine.edges.push({
@@ -3396,7 +3768,7 @@ function loadExample() {
             0,
 
         bendOffsetY:
-            45
+            -12
 
     });
 
@@ -3447,9 +3819,11 @@ canvas.addEventListener(
 
 
             properties.innerHTML =
-                `<p class="empty">
+                `
+                <p class="empty">
                     Selecione uma operação ou conexão.
-                 </p>`;
+                </p>
+                `;
 
 
             render();
