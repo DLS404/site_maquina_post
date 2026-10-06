@@ -175,21 +175,34 @@ const modeText =
 
 
 /* =========================================================
-   TAMANHO PADRÃO DOS ESTADOS
+   NOMES DOS TIPOS
    ========================================================= */
 
-const NODE_WIDTH = 130;
-const NODE_HEIGHT = 60;
+const nodeNames = {
+
+    partida: "Partida",
+
+    marcador: "X ← X#",
+
+    teste: "X ← ler(X)",
+
+    atribuicao: "Atribuição",
+
+    aceita: "Aceita",
+
+    rejeita: "Rejeita"
+
+};
 
 
 /* =========================================================
-   TAMANHOS DOS ESTADOS CIRCULARES
-   =========================================================
-
-   Esses valores precisam acompanhar o CSS.
-
-   PARTIDA é menor que ACEITA/REJEITA.
+   TAMANHOS DOS ESTADOS
    ========================================================= */
+
+const NODE_WIDTH = 130;
+
+const NODE_HEIGHT = 60;
+
 
 function getNodeSize(node) {
 
@@ -256,7 +269,7 @@ function nodeCenter(node) {
 
 
 /* =========================================================
-   PONTO EXATO DA BORDA
+   PONTO DA BORDA DO ESTADO
    ========================================================= */
 
 function getConnectionPoint(
@@ -302,9 +315,9 @@ function getConnectionPoint(
     }
 
 
-    /* =====================================================
-       ESTADOS OVAIS
-       ===================================================== */
+    /*
+       Estados ovais.
+    */
 
     if (
         node.type === "partida" ||
@@ -346,20 +359,22 @@ function getConnectionPoint(
 
             x:
                 cx +
-                dx / denominator,
+                dx /
+                denominator,
 
             y:
                 cy +
-                dy / denominator
+                dy /
+                denominator
 
         };
 
     }
 
 
-    /* =====================================================
-       ESTADOS RETANGULARES
-       ===================================================== */
+    /*
+       Estados retangulares.
+    */
 
     const halfW =
         size.width / 2;
@@ -402,7 +417,7 @@ function getConnectionPoint(
 
 
 /* =========================================================
-   GEOMETRIA DAS CONEXÕES
+   GEOMETRIA DA CONEXÃO
    ========================================================= */
 
 function getEdgeGeometry(edge) {
@@ -441,10 +456,6 @@ function getEdgeGeometry(edge) {
         nodeCenter(target);
 
 
-    /*
-       Borda real do estado de origem.
-    */
-
     const start =
         getConnectionPoint(
             source,
@@ -453,10 +464,6 @@ function getEdgeGeometry(edge) {
         );
 
 
-    /*
-       Borda real do estado de destino.
-    */
-
     const end =
         getConnectionPoint(
             target,
@@ -464,10 +471,6 @@ function getEdgeGeometry(edge) {
             sourceCenter.y
         );
 
-
-    /*
-       Centro da conexão.
-    */
 
     const middleX =
         (
@@ -482,10 +485,6 @@ function getEdgeGeometry(edge) {
             end.y
         ) / 2;
 
-
-    /*
-       Compatibilidade com conexões antigas.
-    */
 
     if (
         edge.bendOffsetX ===
@@ -581,7 +580,7 @@ function addNode(
 
 
 /* =========================================================
-   RENDER
+   RENDER GERAL
    ========================================================= */
 
 function render() {
@@ -724,7 +723,7 @@ function getNodeLabel(node) {
 
 
 /* =========================================================
-   ARRASTAR ESTADOS
+   ARRASTAR ESTADO / CRIAR CONEXÃO
    ========================================================= */
 
 function setupNodeDragging(
@@ -732,38 +731,18 @@ function setupNodeDragging(
     node
 ) {
 
-    let dragging =
-        false;
+    let dragging = false;
 
+    let connecting = false;
 
-    let offsetX =
-        0;
+    let offsetX = 0;
 
-
-    let offsetY =
-        0;
+    let offsetY = 0;
 
 
     element.addEventListener(
         "mousedown",
         event => {
-
-            if (
-                machine.connectionMode
-            ) {
-
-                event.stopPropagation();
-
-
-                handleConnectionClick(
-                    node
-                );
-
-
-                return;
-
-            }
-
 
             if (
                 event.button !== 0
@@ -774,11 +753,48 @@ function setupNodeDragging(
             }
 
 
+            /*
+             ================================================
+             MODO DE CONEXÃO
+             ================================================
+            */
+
+            if (
+                machine.connectionMode
+            ) {
+
+                event.preventDefault();
+
+                event.stopPropagation();
+
+
+                connecting = true;
+
+                machine.connectionStart =
+                    node.id;
+
+
+                createConnectionPreview(
+                    node,
+                    event
+                );
+
+
+                return;
+
+            }
+
+
+            /*
+             ================================================
+             MODO NORMAL
+             ================================================
+            */
+
             saveHistory();
 
 
-            dragging =
-                true;
+            dragging = true;
 
 
             const rect =
@@ -808,8 +824,39 @@ function setupNodeDragging(
     );
 
 
+    /*
+     ========================================================
+     MOVIMENTO
+     ========================================================
+    */
+
     const moveHandler =
         event => {
+
+            /*
+             -----------------------------------------------
+             CONECTANDO
+             -----------------------------------------------
+            */
+
+            if (
+                connecting
+            ) {
+
+                updateConnectionPreview(
+                    event
+                );
+
+                return;
+
+            }
+
+
+            /*
+             -----------------------------------------------
+             MOVENDO ESTADO
+             -----------------------------------------------
+            */
 
             if (!dragging) {
 
@@ -871,11 +918,71 @@ function setupNodeDragging(
         };
 
 
-    const upHandler =
-        () => {
+    /*
+     ========================================================
+     SOLTAR
+     ========================================================
+    */
 
-            dragging =
-                false;
+    const upHandler =
+        event => {
+
+            /*
+             -----------------------------------------------
+             FINALIZAR CONEXÃO
+             -----------------------------------------------
+            */
+
+            if (
+                connecting
+            ) {
+
+                connecting = false;
+
+
+                const target =
+                    getNodeUnderMouse(
+                        event
+                    );
+
+
+                removeConnectionPreview();
+
+
+                const sourceId =
+                    machine.connectionStart;
+
+
+                machine.connectionStart =
+                    null;
+
+
+                if (
+                    target &&
+                    target.id !==
+                        sourceId
+                ) {
+
+                    createEdge(
+                        sourceId,
+                        target.id
+                    );
+
+                }
+
+
+                return;
+
+            }
+
+
+            /*
+             -----------------------------------------------
+             FINALIZAR MOVIMENTO
+             -----------------------------------------------
+            */
+
+            dragging = false;
 
         };
 
@@ -890,6 +997,281 @@ function setupNodeDragging(
         "mouseup",
         upHandler
     );
+
+}
+
+
+/* =========================================================
+   ENCONTRAR ESTADO SOB O MOUSE
+   ========================================================= */
+
+function getNodeUnderMouse(event) {
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+
+    const x =
+        event.clientX -
+        rect.left;
+
+
+    const y =
+        event.clientY -
+        rect.top;
+
+
+    for (
+        let i =
+            machine.nodes.length - 1;
+
+        i >= 0;
+
+        i--
+    ) {
+
+        const node =
+            machine.nodes[i];
+
+
+        const size =
+            getNodeSize(node);
+
+
+        if (
+            x >= node.x &&
+            x <=
+                node.x +
+                size.width &&
+
+            y >= node.y &&
+            y <=
+                node.y +
+                size.height
+        ) {
+
+            return node;
+
+        }
+
+    }
+
+
+    return null;
+
+}
+
+
+/* =========================================================
+   PRÉ-VISUALIZAÇÃO DA CONEXÃO
+   ========================================================= */
+
+function createConnectionPreview(
+    node,
+    event
+) {
+
+    removeConnectionPreview();
+
+
+    const center =
+        nodeCenter(node);
+
+
+    const path =
+        document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "path"
+        );
+
+
+    path.id =
+        "connection-preview";
+
+
+    path.setAttribute(
+        "fill",
+        "none"
+    );
+
+
+    path.setAttribute(
+        "stroke",
+        "#1677ff"
+    );
+
+
+    path.setAttribute(
+        "stroke-width",
+        "2"
+    );
+
+
+    path.setAttribute(
+        "stroke-dasharray",
+        "6 5"
+    );
+
+
+    path.setAttribute(
+        "pointer-events",
+        "none"
+    );
+
+
+    path.setAttribute(
+        "d",
+        `
+        M ${center.x} ${center.y}
+        L ${center.x} ${center.y}
+        `
+    );
+
+
+    svg.appendChild(
+        path
+    );
+
+
+    updateConnectionPreview(
+        event
+    );
+
+}
+
+
+/* =========================================================
+   ATUALIZAR PRÉ-VISUALIZAÇÃO
+   ========================================================= */
+
+function updateConnectionPreview(
+    event
+) {
+
+    const path =
+        document.getElementById(
+            "connection-preview"
+        );
+
+
+    if (!path) {
+
+        return;
+
+    }
+
+
+    const source =
+        machine.nodes.find(
+            n =>
+                n.id ===
+                machine.connectionStart
+        );
+
+
+    if (!source) {
+
+        return;
+
+    }
+
+
+    const rect =
+        canvas.getBoundingClientRect();
+
+
+    const mouseX =
+        event.clientX -
+        rect.left;
+
+
+    const mouseY =
+        event.clientY -
+        rect.top;
+
+
+    const sourceCenter =
+        nodeCenter(source);
+
+
+    const start =
+        getConnectionPoint(
+            source,
+            mouseX,
+            mouseY
+        );
+
+
+    const target =
+        getNodeUnderMouse(
+            event
+        );
+
+
+    let endX =
+        mouseX;
+
+
+    let endY =
+        mouseY;
+
+
+    if (
+        target &&
+        target.id !==
+            source.id
+    ) {
+
+        const targetCenter =
+            nodeCenter(target);
+
+
+        const end =
+            getConnectionPoint(
+                target,
+                sourceCenter.x,
+                sourceCenter.y
+            );
+
+
+        endX =
+            end.x;
+
+
+        endY =
+            end.y;
+
+    }
+
+
+    path.setAttribute(
+        "d",
+        `
+        M ${start.x} ${start.y}
+        L ${endX} ${endY}
+        `
+    );
+
+}
+
+
+/* =========================================================
+   REMOVER PRÉ-VISUALIZAÇÃO
+   ========================================================= */
+
+function removeConnectionPreview() {
+
+    const preview =
+        document.getElementById(
+            "connection-preview"
+        );
+
+
+    if (preview) {
+
+        preview.remove();
+
+    }
 
 }
 
@@ -952,16 +1334,24 @@ function startConnectionMode() {
         null;
 
 
+    removeConnectionPreview();
+
+
     if (
         machine.connectionMode
     ) {
 
         modeText.textContent =
-            "Modo: conectando — clique em dois nós";
+            "Modo: conectar — arraste de um estado para outro";
 
 
         modeText.classList.add(
             "connection-mode"
+        );
+
+
+        canvas.classList.add(
+            "connection-active"
         );
 
     } else {
@@ -974,66 +1364,12 @@ function startConnectionMode() {
             "connection-mode"
         );
 
-    }
 
-}
-
-
-/* =========================================================
-   CRIAR CONEXÃO
-   ========================================================= */
-
-function handleConnectionClick(
-    node
-) {
-
-    if (
-        !machine.connectionStart
-    ) {
-
-        machine.connectionStart =
-            node.id;
-
-
-        modeText.textContent =
-            "Agora clique no nó de destino.";
-
-
-        return;
+        canvas.classList.remove(
+            "connection-active"
+        );
 
     }
-
-
-    if (
-        machine.connectionStart ===
-        node.id
-    ) {
-
-        machine.connectionStart =
-            null;
-
-
-        modeText.textContent =
-            "Escolha outro nó.";
-
-
-        return;
-
-    }
-
-
-    createEdge(
-        machine.connectionStart,
-        node.id
-    );
-
-
-    machine.connectionStart =
-        null;
-
-
-    modeText.textContent =
-        "Conexão criada.";
 
 }
 
@@ -1046,9 +1382,6 @@ function createEdge(
     from,
     to
 ) {
-
-    saveHistory();
-
 
     const source =
         machine.nodes.find(
@@ -1076,36 +1409,67 @@ function createEdge(
     }
 
 
-    let label =
-        "";
-
+    /*
+       Evita conexões normais duplicadas.
+    */
 
     if (
-        source.type ===
+        source.type !==
         "teste"
     ) {
 
-        label =
-            "ε";
+        const alreadyExists =
+            machine.edges.some(
+                edge =>
+
+                    edge.from ===
+                        from &&
+
+                    edge.to ===
+                        to
+            );
+
+
+        if (
+            alreadyExists
+        ) {
+
+            alert(
+                "Essa conexão já existe."
+            );
+
+
+            return;
+
+        }
 
     }
 
 
+    /*
+       No teste, permite várias conexões
+       para o mesmo destino, pois cada
+       uma pode possuir um símbolo diferente.
+    */
+
+    saveHistory();
+
+
     const parallelEdges =
         machine.edges.filter(
-            e =>
-                e.from === from &&
-                e.to === to
+            edge =>
+
+                edge.from ===
+                    from &&
+
+                edge.to ===
+                    to
         );
 
 
     const index =
         parallelEdges.length;
 
-
-    /*
-       Curvas pequenas.
-    */
 
     let bendOffsetY =
         0;
@@ -1116,7 +1480,7 @@ function createEdge(
     ) {
 
         bendOffsetY =
-            12;
+            30;
 
     }
 
@@ -1126,7 +1490,7 @@ function createEdge(
     ) {
 
         bendOffsetY =
-            -22;
+            -30;
 
     }
 
@@ -1136,7 +1500,7 @@ function createEdge(
     ) {
 
         bendOffsetY =
-            22;
+            45;
 
     }
 
@@ -1150,7 +1514,8 @@ function createEdge(
 
         to,
 
-        label,
+        label:
+            "",
 
         bendOffsetX:
             0,
@@ -1165,9 +1530,18 @@ function createEdge(
     );
 
 
+    /*
+       Seleciona automaticamente
+       a conexão recém-criada.
+    */
+
     selectEdge(
         edge.id
     );
+
+
+    modeText.textContent =
+        "Conexão criada. Defina o símbolo no painel.";
 
 }
 
@@ -1303,11 +1677,6 @@ function createArrowMarker() {
 
 function renderEdges() {
 
-    /*
-       Remove apenas elementos das conexões.
-       O <defs> e o marcador continuam intactos.
-    */
-
     svg.querySelectorAll(
         ".edge-element"
     ).forEach(
@@ -1342,9 +1711,11 @@ function renderEdges() {
             } = geometry;
 
 
-            /* =================================================
-               HITBOX INVISÍVEL
-               ================================================= */
+            /*
+             =================================================
+             HITBOX DA SETA
+             =================================================
+            */
 
             const hitPath =
                 document.createElementNS(
@@ -1408,9 +1779,11 @@ function renderEdges() {
             );
 
 
-            /* =================================================
-               LINHA VISÍVEL
-               ================================================= */
+            /*
+             =================================================
+             LINHA VISÍVEL
+             =================================================
+            */
 
             const path =
                 document.createElementNS(
@@ -1447,10 +1820,6 @@ function renderEdges() {
             );
 
 
-            /*
-               A SETA.
-            */
-
             path.setAttribute(
                 "marker-end",
                 "url(#post-arrowhead)"
@@ -1486,9 +1855,11 @@ function renderEdges() {
             );
 
 
-            /* =================================================
-               RÓTULO
-               ================================================= */
+            /*
+             =================================================
+             RÓTULO
+             =================================================
+            */
 
             if (
                 edge.label
@@ -1618,9 +1989,11 @@ function renderEdges() {
             }
 
 
-            /* =================================================
-               PONTO DE CONTROLE
-               ================================================= */
+            /*
+             =================================================
+             PONTO DE CONTROLE
+             =================================================
+            */
 
             if (
                 machine.selectedEdge ===
@@ -1699,7 +2072,7 @@ function renderEdges() {
 
 
 /* =========================================================
-   ARRASTAR SETA
+   ARRASTAR A SETA
    ========================================================= */
 
 function setupEdgeDragging(
@@ -2222,6 +2595,19 @@ function showNodeProperties() {
     }
 
 
+    html += `
+
+        <button
+            id="deleteNodeButton"
+            style="width:100%;">
+
+            🗑 Excluir estado
+
+        </button>
+
+    `;
+
+
     properties.innerHTML =
         html;
 
@@ -2274,6 +2660,26 @@ function showNodeProperties() {
 
     }
 
+
+    const deleteButton =
+        document.getElementById(
+            "deleteNodeButton"
+        );
+
+
+    if (deleteButton) {
+
+        deleteButton.addEventListener(
+            "click",
+            () => {
+
+                deleteSelectedNode();
+
+            }
+        );
+
+    }
+
 }
 
 
@@ -2305,69 +2711,254 @@ function showEdgeProperties() {
     }
 
 
-    properties.innerHTML = `
-
-        <div class="property">
-
-            <label>
-                Rótulo da conexão
-            </label>
-
-            <input
-                id="edgeLabel"
-                value="${edge.label}"
-                placeholder="0, 1, # ou ε">
-
-        </div>
-
-
-        <button
-            id="deleteEdgeButton"
-            style="width:100%;">
-
-            Excluir conexão
-
-        </button>
-
-    `;
-
-
-    const input =
-        document.getElementById(
-            "edgeLabel"
+    const source =
+        machine.nodes.find(
+            n =>
+                n.id ===
+                edge.from
         );
 
 
-    let originalLabel =
-        edge.label;
+    const target =
+        machine.nodes.find(
+            n =>
+                n.id ===
+                edge.to
+        );
 
 
-    input.addEventListener(
-        "change",
-        () => {
+    if (
+        !source ||
+        !target
+    ) {
 
-            if (
-                originalLabel !==
-                input.value
-            ) {
+        return;
+
+    }
+
+
+    /*
+     ========================================================
+     SAÍDA DE UM TESTE
+     ========================================================
+    */
+
+    if (
+        source.type ===
+        "teste"
+    ) {
+
+        properties.innerHTML = `
+
+            <div class="property">
+
+                <label>
+                    Conexão
+                </label>
+
+                <div
+                    style="
+                        background:#f5f5f5;
+                        padding:8px;
+                        border-radius:5px;
+                        margin-top:5px;
+                    "
+                >
+
+                    X ← ler(X)
+
+                    →
+
+                    ${getNodeLabel(target)}
+
+                </div>
+
+            </div>
+
+
+            <div class="property">
+
+                <label>
+                    Símbolo da saída
+                </label>
+
+                <select
+                    id="edgeLabel"
+                    style="width:100%;">
+
+                    <option value="">
+                        Selecione...
+                    </option>
+
+                    <option value="0">
+                        0
+                    </option>
+
+                    <option value="1">
+                        1
+                    </option>
+
+                    <option value="#">
+                        #
+                    </option>
+
+                    <option value="ε">
+                        ε
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <button
+                id="deleteEdgeButton"
+                style="width:100%;">
+
+                🗑 Excluir conexão
+
+            </button>
+
+        `;
+
+
+        const select =
+            document.getElementById(
+                "edgeLabel"
+            );
+
+
+        select.value =
+            edge.label;
+
+
+        select.addEventListener(
+            "change",
+            () => {
+
+                const newValue =
+                    select.value;
+
+
+                if (
+                    newValue === ""
+                ) {
+
+                    return;
+
+                }
+
+
+                /*
+                 Impede duas saídas iguais
+                 saindo do mesmo teste.
+                */
+
+                const duplicate =
+                    machine.edges.some(
+                        other =>
+
+                            other.id !==
+                                edge.id &&
+
+                            other.from ===
+                                edge.from &&
+
+                            other.label ===
+                                newValue
+                    );
+
+
+                if (
+                    duplicate
+                ) {
+
+                    alert(
+                        `Já existe uma saída "${newValue}" para este teste.`
+                    );
+
+
+                    select.value =
+                        edge.label;
+
+
+                    return;
+
+                }
+
 
                 saveHistory();
 
+
+                edge.label =
+                    newValue;
+
+
+                renderEdges();
+
+
+                showEdgeProperties();
+
             }
+        );
+
+    } else {
+
+        /*
+         ====================================================
+         CONEXÃO NORMAL
+         ====================================================
+        */
+
+        properties.innerHTML = `
+
+            <div class="property">
+
+                <label>
+                    Conexão
+                </label>
+
+                <div
+                    style="
+                        background:#f5f5f5;
+                        padding:8px;
+                        border-radius:5px;
+                        margin-top:5px;
+                    "
+                >
+
+                    ${getNodeLabel(source)}
+
+                    →
+
+                    ${getNodeLabel(target)}
+
+                </div>
+
+            </div>
 
 
-            edge.label =
-                input.value;
+            <div class="property">
+
+                <small>
+                    Esta conexão não precisa
+                    de símbolo.
+                </small>
+
+            </div>
 
 
-            originalLabel =
-                edge.label;
+            <button
+                id="deleteEdgeButton"
+                style="width:100%;">
 
+                🗑 Excluir conexão
 
-            renderEdges();
+            </button>
 
-        }
-    );
+        `;
+
+    }
 
 
     const deleteButton =
@@ -2376,113 +2967,78 @@ function showEdgeProperties() {
         );
 
 
-    deleteButton.addEventListener(
-        "click",
-        () => {
+    if (deleteButton) {
 
-            deleteSelectedEdge();
+        deleteButton.addEventListener(
+            "click",
+            () => {
 
-        }
-    );
+                deleteSelectedEdge();
+
+            }
+        );
+
+    }
 
 }
 
 
 /* =========================================================
-   EXCLUIR SELECIONADO
+   EXCLUIR ESTADO
    ========================================================= */
 
-function deleteSelected() {
+function deleteSelectedNode() {
 
     if (
-        machine.selectedNode !==
-            null ||
-        machine.selectedEdge !==
-            null
-    ) {
-
-        saveHistory();
-
-    }
-
-
-    if (
-        machine.selectedNode !==
+        machine.selectedNode ===
         null
     ) {
-
-        const id =
-            machine.selectedNode;
-
-
-        machine.nodes =
-            machine.nodes.filter(
-                n =>
-                    n.id !==
-                    id
-            );
-
-
-        machine.edges =
-            machine.edges.filter(
-                e =>
-                    e.from !== id &&
-                    e.to !== id
-            );
-
-
-        machine.selectedNode =
-            null;
-
-
-        properties.innerHTML =
-            `
-            <p class="empty">
-                Selecione uma operação ou conexão.
-            </p>
-            `;
-
-
-        render();
-
 
         return;
 
     }
 
 
-    if (
-        machine.selectedEdge !==
-        null
-    ) {
-
-        const id =
-            machine.selectedEdge;
+    saveHistory();
 
 
-        machine.edges =
-            machine.edges.filter(
-                e =>
-                    e.id !==
+    const id =
+        machine.selectedNode;
+
+
+    machine.nodes =
+        machine.nodes.filter(
+            node =>
+                node.id !==
+                id
+        );
+
+
+    machine.edges =
+        machine.edges.filter(
+            edge =>
+
+                edge.from !==
+                    id &&
+
+                edge.to !==
                     id
-            );
+        );
 
 
-        machine.selectedEdge =
-            null;
+    machine.selectedNode =
+        null;
 
 
-        properties.innerHTML =
-            `
-            <p class="empty">
-                Selecione uma operação ou conexão.
-            </p>
-            `;
+    properties.innerHTML =
+        `
+        <p class="empty">
+            Selecione uma operação ou conexão.
+        </p>
+        `;
 
 
-        render();
-
-    }
+    render();
 
 }
 
@@ -2508,8 +3064,8 @@ function deleteSelectedEdge() {
 
     machine.edges =
         machine.edges.filter(
-            e =>
-                e.id !==
+            edge =>
+                edge.id !==
                 machine.selectedEdge
         );
 
@@ -2532,6 +3088,36 @@ function deleteSelectedEdge() {
 
 
 /* =========================================================
+   EXCLUIR SELECIONADO
+   ========================================================= */
+
+function deleteSelected() {
+
+    if (
+        machine.selectedNode !==
+        null
+    ) {
+
+        deleteSelectedNode();
+
+        return;
+
+    }
+
+
+    if (
+        machine.selectedEdge !==
+        null
+    ) {
+
+        deleteSelectedEdge();
+
+    }
+
+}
+
+
+/* =========================================================
    TECLADO
    ========================================================= */
 
@@ -2539,7 +3125,9 @@ document.addEventListener(
     "keydown",
     event => {
 
-        /* CTRL + Z */
+        /*
+         CTRL + Z
+        */
 
         if (
             event.ctrlKey &&
@@ -2578,7 +3166,9 @@ document.addEventListener(
         }
 
 
-        /* DELETE */
+        /*
+         DELETE
+        */
 
         if (
             event.key ===
@@ -2616,7 +3206,9 @@ document.addEventListener(
         }
 
 
-        /* ESC */
+        /*
+         ESC
+        */
 
         if (
             event.key ===
@@ -2629,6 +3221,9 @@ document.addEventListener(
 
             machine.connectionStart =
                 null;
+
+
+            removeConnectionPreview();
 
 
             machine.selectedNode =
@@ -2645,6 +3240,11 @@ document.addEventListener(
 
             modeText.classList.remove(
                 "connection-mode"
+            );
+
+
+            canvas.classList.remove(
+                "connection-active"
             );
 
 
@@ -2674,6 +3274,13 @@ function setInputWord() {
         document.getElementById(
             "inputWord"
         );
+
+
+    if (!input) {
+
+        return;
+
+    }
 
 
     machine.inputWord =
@@ -2731,12 +3338,9 @@ function updateQueue() {
 
 function validateMachine() {
 
-    const errors =
-        [];
+    const errors = [];
 
-
-    const warnings =
-        [];
+    const warnings = [];
 
 
     const starts =
@@ -2804,8 +3408,8 @@ function validateMachine() {
 
             const outgoing =
                 machine.edges.filter(
-                    e =>
-                        e.from ===
+                    edge =>
+                        edge.from ===
                         test.id
                 );
 
@@ -2817,6 +3421,36 @@ function validateMachine() {
 
                 warnings.push(
                     "Um teste não possui nenhuma saída."
+                );
+
+            }
+
+
+            const labels =
+                outgoing
+                    .map(
+                        edge =>
+                            edge.label
+                    )
+                    .filter(
+                        label =>
+                            label !== ""
+                    );
+
+
+            const unique =
+                new Set(
+                    labels
+                );
+
+
+            if (
+                unique.size !==
+                labels.length
+            ) {
+
+                errors.push(
+                    "Um teste possui duas saídas com o mesmo símbolo."
                 );
 
             }
@@ -2846,8 +3480,9 @@ function validateMachine() {
                 ${
                     errors
                         .map(
-                            e =>
-                                "✗ " + e
+                            error =>
+                                "✗ " +
+                                error
                         )
                         .join(
                             "<br>"
@@ -2874,8 +3509,9 @@ function validateMachine() {
                 ${
                     warnings
                         .map(
-                            w =>
-                                "⚠ " + w
+                            warning =>
+                                "⚠ " +
+                                warning
                         )
                         .join(
                             "<br>"
@@ -2901,8 +3537,8 @@ function getNextNode(
 
     const outgoing =
         machine.edges.filter(
-            e =>
-                e.from ===
+            edge =>
+                edge.from ===
                 currentNode.id
         );
 
@@ -2928,8 +3564,8 @@ function getNextNode(
 
 
         return machine.nodes.find(
-            n =>
-                n.id ===
+            node =>
+                node.id ===
                 edge.to
         );
 
@@ -2947,8 +3583,8 @@ function getNextNode(
 
 
     return machine.nodes.find(
-        n =>
-            n.id ===
+        node =>
+            node.id ===
             outgoing[0].to
     );
 
@@ -2968,8 +3604,8 @@ function stepMachine() {
 
         const start =
             machine.nodes.find(
-                n =>
-                    n.type ===
+                node =>
+                    node.type ===
                     "partida"
             );
 
@@ -2999,8 +3635,8 @@ function stepMachine() {
 
     const current =
         machine.nodes.find(
-            n =>
-                n.id ===
+            node =>
+                node.id ===
                 machine.currentNode
         );
 
@@ -3011,6 +3647,12 @@ function stepMachine() {
 
     }
 
+
+    /*
+     ========================================================
+     ACEITA
+     ========================================================
+    */
 
     if (
         current.type ===
@@ -3030,6 +3672,12 @@ function stepMachine() {
     }
 
 
+    /*
+     ========================================================
+     REJEITA
+     ========================================================
+    */
+
     if (
         current.type ===
         "rejeita"
@@ -3048,6 +3696,12 @@ function stepMachine() {
     }
 
 
+    /*
+     ========================================================
+     MARCADOR
+     ========================================================
+    */
+
     if (
         current.type ===
         "marcador"
@@ -3063,6 +3717,12 @@ function stepMachine() {
     }
 
 
+    /*
+     ========================================================
+     ATRIBUIÇÃO
+     ========================================================
+    */
+
     if (
         current.type ===
         "atribuicao"
@@ -3077,6 +3737,12 @@ function stepMachine() {
 
     }
 
+
+    /*
+     ========================================================
+     TESTE
+     ========================================================
+    */
 
     if (
         current.type ===
@@ -3134,6 +3800,12 @@ function stepMachine() {
 
     }
 
+
+    /*
+     ========================================================
+     INSTRUÇÃO NORMAL
+     ========================================================
+    */
 
     const next =
         getNextNode(
@@ -3349,48 +4021,30 @@ function newMachine() {
     }
 
 
-    machine.nodes =
-        [];
+    machine.nodes = [];
+
+    machine.edges = [];
+
+    machine.nextNodeId = 1;
+
+    machine.nextEdgeId = 1;
+
+    machine.selectedNode = null;
+
+    machine.selectedEdge = null;
+
+    machine.connectionMode = false;
+
+    machine.connectionStart = null;
+
+    machine.currentNode = null;
+
+    machine.inputWord = "";
+
+    machine.queue = [];
 
 
-    machine.edges =
-        [];
-
-
-    machine.nextNodeId =
-        1;
-
-
-    machine.nextEdgeId =
-        1;
-
-
-    machine.selectedNode =
-        null;
-
-
-    machine.selectedEdge =
-        null;
-
-
-    machine.connectionMode =
-        false;
-
-
-    machine.connectionStart =
-        null;
-
-
-    machine.currentNode =
-        null;
-
-
-    machine.inputWord =
-        "";
-
-
-    machine.queue =
-        [];
+    removeConnectionPreview();
 
 
     const input =
@@ -3401,8 +4055,7 @@ function newMachine() {
 
     if (input) {
 
-        input.value =
-            "";
+        input.value = "";
 
     }
 
@@ -3428,6 +4081,11 @@ function newMachine() {
     );
 
 
+    canvas.classList.remove(
+        "connection-active"
+    );
+
+
     updateQueue();
 
 
@@ -3443,10 +4101,8 @@ function newMachine() {
 function loadExample() {
 
     if (
-        machine.nodes.length >
-            0 ||
-        machine.edges.length >
-            0
+        machine.nodes.length > 0 ||
+        machine.edges.length > 0
     ) {
 
         saveHistory();
@@ -3457,40 +4113,73 @@ function loadExample() {
     pauseMachine();
 
 
-    machine.nodes =
-        [];
+    machine.nodes = [];
+
+    machine.edges = [];
+
+    machine.nextNodeId = 1;
+
+    machine.nextEdgeId = 1;
+
+    machine.selectedNode = null;
+
+    machine.selectedEdge = null;
+
+    machine.currentNode = null;
+
+    machine.connectionMode = false;
+
+    machine.connectionStart = null;
 
 
-    machine.edges =
-        [];
-
-
-    machine.nextNodeId =
-        1;
-
-
-    machine.nextEdgeId =
-        1;
-
-
-    machine.selectedNode =
-        null;
-
-
-    machine.selectedEdge =
-        null;
-
-
-    machine.currentNode =
-        null;
+    removeConnectionPreview();
 
 
     /*
-       =====================================================
-       PARTIDA
-       =====================================================
+     ========================================================
+     TAMANHO DA ÁREA
+     ========================================================
+    */
 
-       Agora ela fica mais próxima do X ← X#.
+    const canvasWidth =
+        canvas.clientWidth || 1200;
+
+
+    const canvasHeight =
+        canvas.clientHeight || 500;
+
+
+    /*
+     ========================================================
+     POSIÇÃO CENTRAL
+     ========================================================
+    */
+
+    const machineWidth =
+        650;
+
+
+    const startX =
+        Math.max(
+            30,
+            (
+                canvasWidth -
+                machineWidth
+            ) / 2
+        );
+
+
+    const centerY =
+        Math.max(
+            100,
+            canvasHeight / 2
+        );
+
+
+    /*
+     ========================================================
+     PARTIDA
+     ========================================================
     */
 
     const start = {
@@ -3502,18 +4191,18 @@ function loadExample() {
             "partida",
 
         x:
-            30,
+            startX,
 
         y:
-            174
+            centerY - 26
 
     };
 
 
     /*
-       =====================================================
-       X ← X#
-       =====================================================
+     ========================================================
+     X ← X#
+     ========================================================
     */
 
     const marker = {
@@ -3525,18 +4214,18 @@ function loadExample() {
             "marcador",
 
         x:
-            140,
+            startX + 115,
 
         y:
-            170
+            centerY - 30
 
     };
 
 
     /*
-       =====================================================
-       X ← ler(X)
-       =====================================================
+     ========================================================
+     X ← ler(X)
+     ========================================================
     */
 
     const test = {
@@ -3548,18 +4237,18 @@ function loadExample() {
             "teste",
 
         x:
-            330,
+            startX + 305,
 
         y:
-            170
+            centerY - 30
 
     };
 
 
     /*
-       =====================================================
-       ACEITA
-       =====================================================
+     ========================================================
+     ACEITA
+     ========================================================
     */
 
     const accept = {
@@ -3571,18 +4260,18 @@ function loadExample() {
             "aceita",
 
         x:
-            570,
+            startX + 550,
 
         y:
-            60
+            centerY - 145
 
     };
 
 
     /*
-       =====================================================
-       REJEITA
-       =====================================================
+     ========================================================
+     REJEITA
+     ========================================================
     */
 
     const reject = {
@@ -3594,10 +4283,10 @@ function loadExample() {
             "rejeita",
 
         x:
-            570,
+            startX + 550,
 
         y:
-            280
+            centerY + 90
 
     };
 
@@ -3612,7 +4301,9 @@ function loadExample() {
 
 
     /*
-       PARTIDA → X ← X#
+     ========================================================
+     PARTIDA → X ← X#
+     ========================================================
     */
 
     machine.edges.push({
@@ -3639,7 +4330,9 @@ function loadExample() {
 
 
     /*
-       X ← X# → X ← ler(X)
+     ========================================================
+     X ← X# → X ← ler(X)
+     ========================================================
     */
 
     machine.edges.push({
@@ -3666,7 +4359,9 @@ function loadExample() {
 
 
     /*
-       0 → ACEITA
+     ========================================================
+     TESTE → ACEITA : 0
+     ========================================================
     */
 
     machine.edges.push({
@@ -3687,13 +4382,15 @@ function loadExample() {
             0,
 
         bendOffsetY:
-            12
+            30
 
     });
 
 
     /*
-       ε → ACEITA
+     ========================================================
+     TESTE → ACEITA : ε
+     ========================================================
     */
 
     machine.edges.push({
@@ -3714,13 +4411,15 @@ function loadExample() {
             0,
 
         bendOffsetY:
-            -12
+            -30
 
     });
 
 
     /*
-       1 → REJEITA
+     ========================================================
+     TESTE → REJEITA : 1
+     ========================================================
     */
 
     machine.edges.push({
@@ -3741,13 +4440,15 @@ function loadExample() {
             0,
 
         bendOffsetY:
-            12
+            -30
 
     });
 
 
     /*
-       # → REJEITA
+     ========================================================
+     TESTE → REJEITA : #
+     ========================================================
     */
 
     machine.edges.push({
@@ -3768,13 +4469,19 @@ function loadExample() {
             0,
 
         bendOffsetY:
-            -12
+            30
 
     });
 
 
     render();
 
+
+    /*
+     ========================================================
+     ENTRADA DO EXEMPLO
+     ========================================================
+    */
 
     const input =
         document.getElementById(
@@ -3809,6 +4516,15 @@ canvas.addEventListener(
             event.target ===
                 nodesContainer
         ) {
+
+            if (
+                machine.connectionMode
+            ) {
+
+                return;
+
+            }
+
 
             machine.selectedNode =
                 null;
