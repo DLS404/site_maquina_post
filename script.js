@@ -33,6 +33,49 @@ const machine = {
 
 
 /* =========================================================
+   SELEÇÃO MÚLTIPLA
+   selectedNode / selectedEdge continuam funcionando:
+   o getter devolve o item único selecionado (ou null) e
+   atribuir null limpa a seleção.
+   ========================================================= */
+
+const selection = {
+    nodes: new Set(),
+    edges: new Set()
+};
+
+Object.defineProperty(machine, "selectedNode", {
+    get() {
+        return selection.nodes.size === 1 && selection.edges.size === 0
+            ? [...selection.nodes][0]
+            : null;
+    },
+    set(value) {
+        selection.nodes.clear();
+        if (value !== null && value !== undefined) {
+            selection.edges.clear();
+            selection.nodes.add(value);
+        }
+    }
+});
+
+Object.defineProperty(machine, "selectedEdge", {
+    get() {
+        return selection.edges.size === 1 && selection.nodes.size === 0
+            ? [...selection.edges][0]
+            : null;
+    },
+    set(value) {
+        selection.edges.clear();
+        if (value !== null && value !== undefined) {
+            selection.nodes.clear();
+            selection.edges.add(value);
+        }
+    }
+});
+
+
+/* =========================================================
    HISTÓRICO - CTRL + Z
    ========================================================= */
 
@@ -420,115 +463,107 @@ function getConnectionPoint(
    GEOMETRIA DA CONEXÃO
    ========================================================= */
 
+/*
+   Quando uma ponta da seta está sendo arrastada para outro
+   estado, esta variável guarda a pré-visualização.
+*/
+let reconnectPreview = null;
+
+
 function getEdgeGeometry(edge) {
 
     const source =
-        machine.nodes.find(
-            n =>
-                n.id ===
-                edge.from
-        );
-
+        machine.nodes.find(n => n.id === edge.from);
 
     const target =
-        machine.nodes.find(
-            n =>
-                n.id ===
-                edge.to
-        );
+        machine.nodes.find(n => n.id === edge.to);
 
-
-    if (
-        !source ||
-        !target
-    ) {
-
+    if (!source || !target) {
         return null;
-
     }
 
+    const sourceCenter = nodeCenter(source);
+    const targetCenter = nodeCenter(target);
 
-    const sourceCenter =
-        nodeCenter(source);
+    const preview =
+        reconnectPreview &&
+        reconnectPreview.edgeId === edge.id
+            ? reconnectPreview
+            : null;
 
+    let start;
+    let end;
 
-    const targetCenter =
-        nodeCenter(target);
+    if (preview && preview.end === "to") {
 
+        const free = preview.hover
+            ? nodeCenter(preview.hover)
+            : { x: preview.x, y: preview.y };
 
-    const start =
-        getConnectionPoint(
+        start = getConnectionPoint(source, free.x, free.y);
+
+        end = preview.hover
+            ? getConnectionPoint(
+                preview.hover,
+                sourceCenter.x,
+                sourceCenter.y
+            )
+            : free;
+
+    } else if (preview && preview.end === "from") {
+
+        const free = preview.hover
+            ? nodeCenter(preview.hover)
+            : { x: preview.x, y: preview.y };
+
+        start = preview.hover
+            ? getConnectionPoint(
+                preview.hover,
+                targetCenter.x,
+                targetCenter.y
+            )
+            : free;
+
+        end = getConnectionPoint(target, free.x, free.y);
+
+    } else {
+
+        start = getConnectionPoint(
             source,
             targetCenter.x,
             targetCenter.y
         );
 
-
-    const end =
-        getConnectionPoint(
+        end = getConnectionPoint(
             target,
             sourceCenter.x,
             sourceCenter.y
         );
 
+    }
 
-    const middleX =
-        (
-            start.x +
-            end.x
-        ) / 2;
+    const middleX = (start.x + end.x) / 2;
+    const middleY = (start.y + end.y) / 2;
 
-
-    const middleY =
-        (
-            start.y +
-            end.y
-        ) / 2;
-
-
-    if (
-        edge.bendOffsetX ===
-        undefined
-    ) {
-
+    if (edge.bendOffsetX === undefined) {
         edge.bendOffsetX = 0;
-
     }
 
-
-    if (
-        edge.bendOffsetY ===
-        undefined
-    ) {
-
+    if (edge.bendOffsetY === undefined) {
         edge.bendOffsetY = 0;
-
     }
-
 
     const control = {
-
-        x:
-            middleX +
-            edge.bendOffsetX,
-
-        y:
-            middleY +
-            edge.bendOffsetY
-
+        x: middleX + edge.bendOffsetX,
+        y: middleY + edge.bendOffsetY
     };
 
-
     return {
-
         source,
         target,
-
         start,
         end,
-
         control
-
     };
 
 }
@@ -594,81 +629,37 @@ function render() {
 
 /* =========================================================
    RENDER DOS ESTADOS
+   (os eventos de mouse ficam em um único listener no canvas)
    ========================================================= */
 
 function renderNodes() {
 
-    nodesContainer.innerHTML =
-        "";
+    nodesContainer.innerHTML = "";
 
+    machine.nodes.forEach(node => {
 
-    machine.nodes.forEach(
-        node => {
+        const element = document.createElement("div");
 
-            const element =
-                document.createElement(
-                    "div"
-                );
+        element.className = `node ${node.type}`;
 
-
-            element.className =
-                `node ${node.type}`;
-
-
-            if (
-                machine.selectedNode ===
-                node.id
-            ) {
-
-                element.classList.add(
-                    "selected"
-                );
-
-            }
-
-
-            if (
-                machine.currentNode ===
-                node.id
-            ) {
-
-                element.classList.add(
-                    "current"
-                );
-
-            }
-
-
-            element.dataset.id =
-                node.id;
-
-
-            element.style.left =
-                node.x + "px";
-
-
-            element.style.top =
-                node.y + "px";
-
-
-            element.textContent =
-                getNodeLabel(
-                    node
-                );
-
-
-            nodesContainer.appendChild(
-                element
-            );
-
-
-            setupNodeDragging(
-                element,
-                node
-            );
-
+        if (selection.nodes.has(node.id)) {
+            element.classList.add("selected");
         }
-    );
+
+        if (machine.currentNode === node.id) {
+            element.classList.add("current");
+        }
+
+        element.dataset.id = node.id;
+
+        element.style.left = node.x + "px";
+        element.style.top = node.y + "px";
+
+        element.textContent = getNodeLabel(node);
+
+        nodesContainer.appendChild(element);
+
+    });
 
 }
 
@@ -718,285 +709,6 @@ function getNodeLabel(node) {
             return "";
 
     }
-
-}
-
-
-/* =========================================================
-   ARRASTAR ESTADO / CRIAR CONEXÃO
-   ========================================================= */
-
-function setupNodeDragging(
-    element,
-    node
-) {
-
-    let dragging = false;
-
-    let connecting = false;
-
-    let offsetX = 0;
-
-    let offsetY = 0;
-
-
-    element.addEventListener(
-        "mousedown",
-        event => {
-
-            if (
-                event.button !== 0
-            ) {
-
-                return;
-
-            }
-
-
-            /*
-             ================================================
-             MODO DE CONEXÃO
-             ================================================
-            */
-
-            if (
-                machine.connectionMode
-            ) {
-
-                event.preventDefault();
-
-                event.stopPropagation();
-
-
-                connecting = true;
-
-                machine.connectionStart =
-                    node.id;
-
-
-                createConnectionPreview(
-                    node,
-                    event
-                );
-
-
-                return;
-
-            }
-
-
-            /*
-             ================================================
-             MODO NORMAL
-             ================================================
-            */
-
-            saveHistory();
-
-
-            dragging = true;
-
-
-            const rect =
-                canvas.getBoundingClientRect();
-
-
-            offsetX =
-                event.clientX -
-                rect.left -
-                node.x;
-
-
-            offsetY =
-                event.clientY -
-                rect.top -
-                node.y;
-
-
-            selectNode(
-                node.id
-            );
-
-
-            event.preventDefault();
-
-        }
-    );
-
-
-    /*
-     ========================================================
-     MOVIMENTO
-     ========================================================
-    */
-
-    const moveHandler =
-        event => {
-
-            /*
-             -----------------------------------------------
-             CONECTANDO
-             -----------------------------------------------
-            */
-
-            if (
-                connecting
-            ) {
-
-                updateConnectionPreview(
-                    event
-                );
-
-                return;
-
-            }
-
-
-            /*
-             -----------------------------------------------
-             MOVENDO ESTADO
-             -----------------------------------------------
-            */
-
-            if (!dragging) {
-
-                return;
-
-            }
-
-
-            const rect =
-                canvas.getBoundingClientRect();
-
-
-            node.x =
-                event.clientX -
-                rect.left -
-                offsetX;
-
-
-            node.y =
-                event.clientY -
-                rect.top -
-                offsetY;
-
-
-            const size =
-                getNodeSize(node);
-
-
-            node.x =
-                Math.max(
-                    5,
-
-                    Math.min(
-                        canvas.clientWidth -
-                        size.width -
-                        5,
-
-                        node.x
-                    )
-                );
-
-
-            node.y =
-                Math.max(
-                    5,
-
-                    Math.min(
-                        canvas.clientHeight -
-                        size.height -
-                        5,
-
-                        node.y
-                    )
-                );
-
-
-            render();
-
-        };
-
-
-    /*
-     ========================================================
-     SOLTAR
-     ========================================================
-    */
-
-    const upHandler =
-        event => {
-
-            /*
-             -----------------------------------------------
-             FINALIZAR CONEXÃO
-             -----------------------------------------------
-            */
-
-            if (
-                connecting
-            ) {
-
-                connecting = false;
-
-
-                const target =
-                    getNodeUnderMouse(
-                        event
-                    );
-
-
-                removeConnectionPreview();
-
-
-                const sourceId =
-                    machine.connectionStart;
-
-
-                machine.connectionStart =
-                    null;
-
-
-                if (
-                    target &&
-                    target.id !==
-                        sourceId
-                ) {
-
-                    createEdge(
-                        sourceId,
-                        target.id
-                    );
-
-                }
-
-
-                return;
-
-            }
-
-
-            /*
-             -----------------------------------------------
-             FINALIZAR MOVIMENTO
-             -----------------------------------------------
-            */
-
-            dragging = false;
-
-        };
-
-
-    document.addEventListener(
-        "mousemove",
-        moveHandler
-    );
-
-
-    document.addEventListener(
-        "mouseup",
-        upHandler
-    );
 
 }
 
@@ -1277,43 +989,156 @@ function removeConnectionPreview() {
 
 
 /* =========================================================
-   SELECIONAR ESTADO
+   SELEÇÃO (ESTADOS E CONEXÕES)
    ========================================================= */
 
-function selectNode(id) {
-
-    machine.selectedNode =
-        id;
-
-
-    machine.selectedEdge =
-        null;
+const EMPTY_PROPERTIES_HTML = `
+    <p class="empty">
+        Selecione uma operação ou conexão.
+    </p>
+`;
 
 
-    showNodeProperties();
+function sameSet(a, b) {
 
+    if (a.size !== b.size) {
+        return false;
+    }
+
+    for (const value of a) {
+        if (!b.has(value)) {
+            return false;
+        }
+    }
+
+    return true;
+
+}
+
+
+function selectionCount() {
+
+    return selection.nodes.size + selection.edges.size;
+
+}
+
+
+/* Mostra o painel certo conforme o que está selecionado. */
+
+function refreshProperties() {
+
+    const nodes = selection.nodes.size;
+    const edges = selection.edges.size;
+
+    if (nodes === 0 && edges === 0) {
+
+        properties.innerHTML = EMPTY_PROPERTIES_HTML;
+
+    } else if (nodes === 1 && edges === 0) {
+
+        showNodeProperties();
+
+    } else if (nodes === 0 && edges === 1) {
+
+        showEdgeProperties();
+
+    } else {
+
+        showMultiProperties();
+
+    }
+
+}
+
+
+function showMultiProperties() {
+
+    const nodes = selection.nodes.size;
+    const edges = selection.edges.size;
+
+    const parts = [];
+
+    if (nodes > 0) {
+        parts.push(`${nodes} estado${nodes > 1 ? "s" : ""}`);
+    }
+
+    if (edges > 0) {
+        parts.push(`${edges} conexõ${edges > 1 ? "es" : "o"}`);
+    }
+
+    properties.innerHTML = `
+        <div class="property">
+            <label>Seleção múltipla</label>
+            <div style="background:#f5f5f5;padding:8px;border-radius:5px;margin-top:5px;">
+                ${parts.join(" e ")}
+            </div>
+        </div>
+
+        <div class="property">
+            <small>
+                Arraste um estado selecionado para mover o grupo.
+                Pressione Delete para excluir tudo de uma vez.
+            </small>
+        </div>
+
+        <button id="deleteSelectionButton" style="width:100%;">
+            🗑 Excluir seleção
+        </button>
+    `;
+
+    document
+        .getElementById("deleteSelectionButton")
+        .addEventListener("click", deleteSelected);
+
+}
+
+
+function clearSelection() {
+
+    selection.nodes.clear();
+    selection.edges.clear();
+
+    refreshProperties();
 
     render();
 
 }
 
 
-/* =========================================================
-   SELECIONAR CONEXÃO
-   ========================================================= */
+function selectNode(id) {
+
+    selection.nodes.clear();
+    selection.edges.clear();
+
+    selection.nodes.add(id);
+
+    refreshProperties();
+
+    render();
+
+}
+
 
 function selectEdge(id) {
 
-    machine.selectedEdge =
-        id;
+    selection.nodes.clear();
+    selection.edges.clear();
+
+    selection.edges.add(id);
+
+    refreshProperties();
+
+    render();
+
+}
 
 
-    machine.selectedNode =
-        null;
+function selectAll() {
 
+    selection.nodes = new Set(machine.nodes.map(n => n.id));
+    selection.edges = new Set(machine.edges.map(e => e.id));
 
-    showEdgeProperties();
-
+    refreshProperties();
 
     render();
 
@@ -1672,814 +1497,1032 @@ function createArrowMarker() {
 
 
 /* =========================================================
+   CAMADAS EXTRAS DO CANVAS
+   ========================================================= */
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/*
+   Camada por cima dos estados: guarda as alças da seta
+   selecionada (curvar e reconectar as pontas).
+*/
+const overlay = document.createElementNS(SVG_NS, "svg");
+
+overlay.id = "overlay";
+
+canvas.appendChild(overlay);
+
+
+/* Retângulo de seleção (estilo Windows). */
+const selectionBox = document.createElement("div");
+
+selectionBox.id = "selectionBox";
+
+canvas.appendChild(selectionBox);
+
+
+function svgElement(name, attributes = {}) {
+
+    const element = document.createElementNS(SVG_NS, name);
+
+    Object.entries(attributes).forEach(([key, value]) => {
+        element.setAttribute(key, value);
+    });
+
+    return element;
+
+}
+
+
+/* =========================================================
    RENDER DAS CONEXÕES
    ========================================================= */
 
 function renderEdges() {
 
-    svg.querySelectorAll(
-        ".edge-element"
-    ).forEach(
-        element =>
-            element.remove()
-    );
+    svg.querySelectorAll(".edge-element")
+        .forEach(element => element.remove());
 
+    overlay.innerHTML = "";
 
     createArrowMarker();
 
+    const singleEdgeId =
+        selection.edges.size === 1 && selection.nodes.size === 0
+            ? [...selection.edges][0]
+            : null;
 
-    machine.edges.forEach(
-        edge => {
+    machine.edges.forEach(edge => {
 
-            const geometry =
-                getEdgeGeometry(
-                    edge
-                );
+        const geometry = getEdgeGeometry(edge);
 
+        if (!geometry) {
+            return;
+        }
 
-            if (!geometry) {
+        const { start, end, control } = geometry;
 
-                return;
+        const d =
+            `M ${start.x} ${start.y} ` +
+            `Q ${control.x} ${control.y} ${end.x} ${end.y}`;
 
-            }
+        const selected = selection.edges.has(edge.id);
 
 
-            const {
-                start,
-                end,
-                control
-            } = geometry;
+        /* ---------- HITBOX (área de clique mais grossa) ---------- */
 
+        const hitPath = svgElement("path", {
+            d,
+            fill: "none",
+            stroke: "transparent",
+            "stroke-width": "20",
+            "pointer-events": "stroke"
+        });
 
-            /*
-             =================================================
-             HITBOX DA SETA
-             =================================================
-            */
+        hitPath.classList.add("edge-element", "edge-hit");
+        hitPath.dataset.edgeHit = edge.id;
+        hitPath.style.cursor = "grab";
 
-            const hitPath =
-                document.createElementNS(
-                    "http://www.w3.org/2000/svg",
-                    "path"
-                );
+        svg.appendChild(hitPath);
 
 
-            hitPath.classList.add(
-                "edge-element",
-                "edge-hit"
-            );
+        /* ---------- LINHA VISÍVEL ---------- */
 
+        const path = svgElement("path", {
+            d,
+            fill: "none",
+            stroke: "#555",
+            "stroke-width": "2",
+            "marker-end": "url(#post-arrowhead)",
+            "pointer-events": "none"
+        });
 
-            hitPath.setAttribute(
-                "d",
-                `
-                M ${start.x} ${start.y}
-                Q ${control.x} ${control.y}
-                  ${end.x} ${end.y}
-                `
-            );
+        path.classList.add("edge-element", "edge");
 
+        if (selected) {
+            path.classList.add("selected");
+        }
 
-            hitPath.setAttribute(
-                "fill",
-                "none"
-            );
+        svg.appendChild(path);
 
 
-            hitPath.setAttribute(
-                "stroke",
-                "transparent"
-            );
+        /* ---------- RÓTULO ---------- */
 
+        if (edge.label) {
 
-            hitPath.setAttribute(
-                "stroke-width",
-                "20"
-            );
+            const labelX =
+                0.20 * start.x + 0.60 * control.x + 0.20 * end.x;
 
+            const labelY =
+                0.20 * start.y + 0.60 * control.y + 0.20 * end.y;
 
-            hitPath.setAttribute(
-                "pointer-events",
-                "stroke"
-            );
+            const group = svgElement("g", {
+                "pointer-events": "none"
+            });
 
+            group.classList.add("edge-element");
 
-            hitPath.style.cursor =
-                "grab";
+            const background = svgElement("rect", {
+                x: labelX - 13,
+                y: labelY - 14,
+                width: 26,
+                height: 21,
+                rx: 4,
+                fill: "#ffffff"
+            });
 
+            const label = svgElement("text", {
+                x: labelX,
+                y: labelY + 4,
+                "text-anchor": "middle"
+            });
 
-            setupEdgeDragging(
-                hitPath,
-                edge
-            );
+            label.classList.add("edge-label");
+            label.textContent = edge.label;
 
+            group.appendChild(background);
+            group.appendChild(label);
 
-            svg.appendChild(
-                hitPath
-            );
-
-
-            /*
-             =================================================
-             LINHA VISÍVEL
-             =================================================
-            */
-
-            const path =
-                document.createElementNS(
-                    "http://www.w3.org/2000/svg",
-                    "path"
-                );
-
-
-            path.classList.add(
-                "edge-element",
-                "edge"
-            );
-
-
-            if (
-                machine.selectedEdge ===
-                edge.id
-            ) {
-
-                path.classList.add(
-                    "selected"
-                );
-
-            }
-
-
-            path.setAttribute(
-                "d",
-                `
-                M ${start.x} ${start.y}
-                Q ${control.x} ${control.y}
-                  ${end.x} ${end.y}
-                `
-            );
-
-
-            path.setAttribute(
-                "marker-end",
-                "url(#post-arrowhead)"
-            );
-
-
-            path.setAttribute(
-                "pointer-events",
-                "none"
-            );
-
-
-            path.setAttribute(
-                "fill",
-                "none"
-            );
-
-
-            path.setAttribute(
-                "stroke",
-                "#555"
-            );
-
-
-            path.setAttribute(
-                "stroke-width",
-                "2"
-            );
-
-
-            svg.appendChild(
-                path
-            );
-
-
-            /*
-             =================================================
-             RÓTULO
-             =================================================
-            */
-
-            if (
-                edge.label
-            ) {
-
-                const labelX =
-                    0.20 * start.x +
-                    0.60 * control.x +
-                    0.20 * end.x;
-
-
-                const labelY =
-                    0.20 * start.y +
-                    0.60 * control.y +
-                    0.20 * end.y;
-
-
-                const group =
-                    document.createElementNS(
-                        "http://www.w3.org/2000/svg",
-                        "g"
-                    );
-
-
-                group.classList.add(
-                    "edge-element"
-                );
-
-
-                const background =
-                    document.createElementNS(
-                        "http://www.w3.org/2000/svg",
-                        "rect"
-                    );
-
-
-                background.setAttribute(
-                    "x",
-                    labelX - 13
-                );
-
-
-                background.setAttribute(
-                    "y",
-                    labelY - 14
-                );
-
-
-                background.setAttribute(
-                    "width",
-                    26
-                );
-
-
-                background.setAttribute(
-                    "height",
-                    21
-                );
-
-
-                background.setAttribute(
-                    "rx",
-                    4
-                );
-
-
-                background.setAttribute(
-                    "fill",
-                    "#ffffff"
-                );
-
-
-                const label =
-                    document.createElementNS(
-                        "http://www.w3.org/2000/svg",
-                        "text"
-                    );
-
-
-                label.classList.add(
-                    "edge-label"
-                );
-
-
-                label.setAttribute(
-                    "x",
-                    labelX
-                );
-
-
-                label.setAttribute(
-                    "y",
-                    labelY + 4
-                );
-
-
-                label.setAttribute(
-                    "text-anchor",
-                    "middle"
-                );
-
-
-                label.textContent =
-                    edge.label;
-
-
-                group.setAttribute(
-                    "pointer-events",
-                    "none"
-                );
-
-
-                group.appendChild(
-                    background
-                );
-
-
-                group.appendChild(
-                    label
-                );
-
-
-                svg.appendChild(
-                    group
-                );
-
-            }
-
-
-            /*
-             =================================================
-             PONTO DE CONTROLE
-             =================================================
-            */
-
-            if (
-                machine.selectedEdge ===
-                edge.id
-            ) {
-
-                const handle =
-                    document.createElementNS(
-                        "http://www.w3.org/2000/svg",
-                        "circle"
-                    );
-
-
-                handle.classList.add(
-                    "edge-element",
-                    "edge-handle"
-                );
-
-
-                handle.setAttribute(
-                    "cx",
-                    control.x
-                );
-
-
-                handle.setAttribute(
-                    "cy",
-                    control.y
-                );
-
-
-                handle.setAttribute(
-                    "r",
-                    7
-                );
-
-
-                handle.setAttribute(
-                    "fill",
-                    "#ffffff"
-                );
-
-
-                handle.setAttribute(
-                    "stroke",
-                    "#1677ff"
-                );
-
-
-                handle.setAttribute(
-                    "stroke-width",
-                    "2"
-                );
-
-
-                handle.style.cursor =
-                    "grab";
-
-
-                setupEdgeHandle(
-                    handle,
-                    edge
-                );
-
-
-                svg.appendChild(
-                    handle
-                );
-
-            }
+            svg.appendChild(group);
 
         }
-    );
+
+
+        /* ---------- ALÇAS (só com uma seta selecionada) ---------- */
+
+        if (edge.id === singleEdgeId) {
+
+            const handles = [
+                { role: "ctrl", x: control.x, y: control.y, cls: "edge-handle", r: 7 },
+                { role: "from", x: start.x, y: start.y, cls: "edge-end-handle", r: 6 },
+                { role: "to", x: end.x, y: end.y, cls: "edge-end-handle", r: 6 }
+            ];
+
+            handles.forEach(h => {
+
+                const circle = svgElement("circle", {
+                    cx: h.x,
+                    cy: h.y,
+                    r: h.r
+                });
+
+                circle.classList.add(h.cls);
+                circle.dataset.handle = h.role;
+                circle.dataset.edge = edge.id;
+
+                overlay.appendChild(circle);
+
+            });
+
+        }
+
+    });
 
 }
 
 
 /* =========================================================
-   ARRASTAR A SETA
+   INTERAÇÃO: ARRASTAR, SELECIONAR, RECONECTAR
+   Um único conjunto de listeners cuida de tudo.
    ========================================================= */
 
-function setupEdgeDragging(
-    element,
-    edge
-) {
+const DRAG_THRESHOLD = 3;
 
-    let dragging =
-        false;
+let drag = null;
 
 
-    element.addEventListener(
-        "pointerdown",
-        event => {
+function canvasPoint(event) {
 
-            if (
-                event.button !== 0
-            ) {
+    const rect = canvas.getBoundingClientRect();
 
-                return;
+    return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+    };
 
-            }
-
-
-            saveHistory();
+}
 
 
-            dragging =
-                true;
+function isAdditive(event) {
+
+    return event.ctrlKey || event.shiftKey || event.metaKey;
+
+}
 
 
-            selectEdge(
-                edge.id
-            );
+function toggleInSelection(set, id) {
+
+    if (set.has(id)) {
+        set.delete(id);
+    } else {
+        set.add(id);
+    }
+
+}
 
 
-            try {
+canvas.addEventListener("pointerdown", event => {
 
-                element.setPointerCapture(
-                    event.pointerId
-                );
+    if (event.button !== 0) {
+        return;
+    }
 
-            } catch (_) {}
+    /* Tira o foco de selects/inputs para o Delete funcionar. */
+    const active = document.activeElement;
+
+    if (
+        active &&
+        ["INPUT", "SELECT", "TEXTAREA", "BUTTON"].includes(active.tagName)
+    ) {
+        active.blur();
+    }
+
+    event.preventDefault();
+
+    try {
+        canvas.setPointerCapture(event.pointerId);
+    } catch (_) {}
+
+    const target = event.target;
+
+    const handleElement = target.closest("[data-handle]");
+    const nodeElement = target.closest(".node");
+    const hitElement = target.closest("[data-edge-hit]");
+
+    const point = canvasPoint(event);
+
+    if (handleElement) {
+        startHandleDrag(handleElement, point);
+        return;
+    }
+
+    if (nodeElement) {
+        startNodePress(event, nodeElement, point);
+        return;
+    }
+
+    if (hitElement && !machine.connectionMode) {
+        startEdgePress(event, hitElement, point);
+        return;
+    }
+
+    startMarquee(event, point);
+
+});
 
 
-            element.style.cursor =
-                "grabbing";
+document.addEventListener("pointermove", event => {
+
+    if (!drag) {
+        return;
+    }
+
+    const point = canvasPoint(event);
+
+    switch (drag.type) {
+
+        case "connect":
+            updateConnectionPreview(event);
+            break;
+
+        case "nodes":
+            moveSelectedNodes(point);
+            break;
+
+        case "edge":
+            bendEdgeByBody(point);
+            break;
+
+        case "ctrl":
+            moveControlHandle(point);
+            break;
+
+        case "reconnect":
+            moveReconnectHandle(event, point);
+            break;
+
+        case "marquee":
+            updateMarquee(point);
+            break;
+
+    }
+
+});
 
 
-            event.preventDefault();
+document.addEventListener("pointerup", endDrag);
 
-            event.stopPropagation();
+document.addEventListener("pointercancel", endDrag);
 
+
+/* ---------- ESTADOS ---------- */
+
+function startNodePress(event, nodeElement, point) {
+
+    const id = Number(nodeElement.dataset.id);
+
+    const node = machine.nodes.find(n => n.id === id);
+
+    if (!node) {
+        return;
+    }
+
+    /* Modo conectar: arrastar de um estado a outro. */
+    if (machine.connectionMode) {
+
+        machine.connectionStart = id;
+
+        createConnectionPreview(node, event);
+
+        drag = { type: "connect" };
+
+        return;
+
+    }
+
+    /* Ctrl/Shift + clique: adiciona ou remove da seleção. */
+    if (isAdditive(event)) {
+
+        toggleInSelection(selection.nodes, id);
+
+        refreshProperties();
+        render();
+
+        return;
+
+    }
+
+    /* Clique em estado fora da seleção: seleciona só ele. */
+    if (!selection.nodes.has(id)) {
+
+        selection.nodes.clear();
+        selection.edges.clear();
+
+        selection.nodes.add(id);
+
+    }
+
+    const origins = new Map();
+
+    selection.nodes.forEach(nodeId => {
+
+        const n = machine.nodes.find(item => item.id === nodeId);
+
+        if (n) {
+            origins.set(nodeId, { x: n.x, y: n.y });
         }
+
+    });
+
+    drag = {
+        type: "nodes",
+        startX: point.x,
+        startY: point.y,
+        moved: false,
+        clickedId: id,
+        multi: selectionCount() > 1,
+        origins
+    };
+
+    refreshProperties();
+    render();
+
+}
+
+
+function moveSelectedNodes(point) {
+
+    let dx = point.x - drag.startX;
+    let dy = point.y - drag.startY;
+
+    if (!drag.moved) {
+
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+            return;
+        }
+
+        drag.moved = true;
+
+        saveHistory();
+
+    }
+
+    /* Limita o grupo inteiro às bordas da área. */
+    let minDx = -Infinity;
+    let maxDx = Infinity;
+    let minDy = -Infinity;
+    let maxDy = Infinity;
+
+    drag.origins.forEach((origin, id) => {
+
+        const node = machine.nodes.find(n => n.id === id);
+
+        if (!node) {
+            return;
+        }
+
+        const size = getNodeSize(node);
+
+        minDx = Math.max(minDx, 5 - origin.x);
+        maxDx = Math.min(maxDx, canvas.clientWidth - size.width - 5 - origin.x);
+
+        minDy = Math.max(minDy, 5 - origin.y);
+        maxDy = Math.min(maxDy, canvas.clientHeight - size.height - 5 - origin.y);
+
+    });
+
+    dx = Math.max(minDx, Math.min(maxDx, dx));
+    dy = Math.max(minDy, Math.min(maxDy, dy));
+
+    drag.origins.forEach((origin, id) => {
+
+        const node = machine.nodes.find(n => n.id === id);
+
+        if (node) {
+            node.x = origin.x + dx;
+            node.y = origin.y + dy;
+        }
+
+    });
+
+    render();
+
+}
+
+
+/* ---------- SETAS ---------- */
+
+function bendWeightAt(edge, point) {
+
+    const g = getEdgeGeometry(edge);
+
+    if (!g) {
+        return 0.5;
+    }
+
+    let bestT = 0.5;
+    let bestDistance = Infinity;
+
+    for (let i = 1; i < 40; i++) {
+
+        const t = i / 40;
+        const u = 1 - t;
+
+        const x = u * u * g.start.x + 2 * t * u * g.control.x + t * t * g.end.x;
+        const y = u * u * g.start.y + 2 * t * u * g.control.y + t * t * g.end.y;
+
+        const distance = (x - point.x) ** 2 + (y - point.y) ** 2;
+
+        if (distance < bestDistance) {
+            bestDistance = distance;
+            bestT = t;
+        }
+
+    }
+
+    /* Mover o ponto de controle em Δ move a curva em 2t(1-t)·Δ. */
+    return Math.max(2 * bestT * (1 - bestT), 0.15);
+
+}
+
+
+function startEdgePress(event, hitElement, point) {
+
+    const id = Number(hitElement.dataset.edgeHit);
+
+    const edge = machine.edges.find(e => e.id === id);
+
+    if (!edge) {
+        return;
+    }
+
+    if (isAdditive(event)) {
+
+        toggleInSelection(selection.edges, id);
+
+        refreshProperties();
+        render();
+
+        return;
+
+    }
+
+    if (!selection.edges.has(id)) {
+
+        selection.nodes.clear();
+        selection.edges.clear();
+
+        selection.edges.add(id);
+
+    }
+
+    const single = selectionCount() === 1;
+
+    drag = {
+        type: "edge",
+        edgeId: id,
+        startX: point.x,
+        startY: point.y,
+        moved: false,
+        single,
+        multi: !single,
+        startBend: {
+            x: edge.bendOffsetX || 0,
+            y: edge.bendOffsetY || 0
+        },
+        weight: single ? bendWeightAt(edge, point) : 1
+    };
+
+    refreshProperties();
+    render();
+
+}
+
+
+function bendEdgeByBody(point) {
+
+    if (!drag.single) {
+        return;
+    }
+
+    const dx = point.x - drag.startX;
+    const dy = point.y - drag.startY;
+
+    if (!drag.moved) {
+
+        if (Math.hypot(dx, dy) < DRAG_THRESHOLD) {
+            return;
+        }
+
+        drag.moved = true;
+
+        saveHistory();
+
+    }
+
+    const edge = machine.edges.find(e => e.id === drag.edgeId);
+
+    if (!edge) {
+        return;
+    }
+
+    edge.bendOffsetX = drag.startBend.x + dx / drag.weight;
+    edge.bendOffsetY = drag.startBend.y + dy / drag.weight;
+
+    renderEdges();
+
+}
+
+
+/* ---------- ALÇAS DA SETA SELECIONADA ---------- */
+
+function startHandleDrag(handleElement, point) {
+
+    const edge = machine.edges.find(
+        e => e.id === Number(handleElement.dataset.edge)
     );
 
+    if (!edge) {
+        return;
+    }
 
-    element.addEventListener(
-        "pointermove",
-        event => {
+    const role = handleElement.dataset.handle;
 
-            if (!dragging) {
+    if (role === "ctrl") {
 
-                return;
+        const g = getEdgeGeometry(edge);
 
-            }
+        drag = {
+            type: "ctrl",
+            edgeId: edge.id,
+            startX: point.x,
+            startY: point.y,
+            moved: false,
+            grabX: g ? g.control.x - point.x : 0,
+            grabY: g ? g.control.y - point.y : 0
+        };
 
+        return;
 
-            const rect =
-                canvas.getBoundingClientRect();
+    }
 
+    drag = {
+        type: "reconnect",
+        edgeId: edge.id,
+        end: role === "from" ? "from" : "to",
+        startX: point.x,
+        startY: point.y,
+        moved: false
+    };
 
-            const mouseX =
-                event.clientX -
-                rect.left;
-
-
-            const mouseY =
-                event.clientY -
-                rect.top;
-
-
-            const source =
-                machine.nodes.find(
-                    n =>
-                        n.id ===
-                        edge.from
-                );
-
-
-            const target =
-                machine.nodes.find(
-                    n =>
-                        n.id ===
-                        edge.to
-                );
+}
 
 
-            if (
-                !source ||
-                !target
-            ) {
+function moveControlHandle(point) {
 
-                return;
+    if (!drag.moved) {
 
-            }
+        if (
+            Math.hypot(point.x - drag.startX, point.y - drag.startY) <
+            DRAG_THRESHOLD
+        ) {
+            return;
+        }
 
+        drag.moved = true;
 
-            const sourceCenter =
-                nodeCenter(
-                    source
-                );
+        saveHistory();
 
+    }
 
-            const targetCenter =
-                nodeCenter(
-                    target
-                );
+    const edge = machine.edges.find(e => e.id === drag.edgeId);
 
+    const g = edge && getEdgeGeometry(edge);
 
-            const start =
-                getConnectionPoint(
-                    source,
-                    targetCenter.x,
-                    targetCenter.y
-                );
+    if (!g) {
+        return;
+    }
 
+    const middleX = (g.start.x + g.end.x) / 2;
+    const middleY = (g.start.y + g.end.y) / 2;
 
-            const end =
-                getConnectionPoint(
-                    target,
-                    sourceCenter.x,
-                    sourceCenter.y
-                );
+    edge.bendOffsetX = point.x + drag.grabX - middleX;
+    edge.bendOffsetY = point.y + drag.grabY - middleY;
+
+    renderEdges();
+
+}
 
 
-            const middleX =
-                (
-                    start.x +
-                    end.x
-                ) / 2;
+function moveReconnectHandle(event, point) {
+
+    if (!drag.moved) {
+
+        if (
+            Math.hypot(point.x - drag.startX, point.y - drag.startY) <
+            DRAG_THRESHOLD
+        ) {
+            return;
+        }
+
+        drag.moved = true;
+
+    }
+
+    const edge = machine.edges.find(e => e.id === drag.edgeId);
+
+    if (!edge) {
+        return;
+    }
+
+    const otherId = drag.end === "to" ? edge.from : edge.to;
+
+    let hover = getNodeUnderMouse(event);
+
+    if (hover && hover.id === otherId) {
+        hover = null;
+    }
+
+    reconnectPreview = {
+        edgeId: edge.id,
+        end: drag.end,
+        x: point.x,
+        y: point.y,
+        hover
+    };
+
+    renderEdges();
+
+}
 
 
-            const middleY =
-                (
-                    start.y +
-                    end.y
-                ) / 2;
+/*
+   Troca origem/destino de uma seta já existente.
+   Mantém as mesmas regras de createEdge.
+*/
+function tryReconnectEdge(edge, from, to) {
 
+    if (from === edge.from && to === edge.to) {
+        return false;
+    }
 
-            edge.bendOffsetX =
-                mouseX -
-                middleX;
+    if (from === to) {
 
+        alert("Uma conexão não pode ligar um estado a ele mesmo.");
 
-            edge.bendOffsetY =
-                mouseY -
-                middleY;
+        return false;
 
+    }
 
-            renderEdges();
+    const source = machine.nodes.find(n => n.id === from);
+    const target = machine.nodes.find(n => n.id === to);
+
+    if (!source || !target) {
+        return false;
+    }
+
+    if (source.type !== "teste") {
+
+        const alreadyExists = machine.edges.some(
+            other =>
+                other.id !== edge.id &&
+                other.from === from &&
+                other.to === to
+        );
+
+        if (alreadyExists) {
+
+            alert("Essa conexão já existe.");
+
+            return false;
 
         }
-    );
+
+    }
+
+    saveHistory();
+
+    const index = machine.edges.filter(
+        other =>
+            other.id !== edge.id &&
+            other.from === from &&
+            other.to === to
+    ).length;
+
+    edge.from = from;
+    edge.to = to;
+
+    edge.bendOffsetX = 0;
+    edge.bendOffsetY = [0, 30, -30, 45][index] ?? 0;
+
+    /* O símbolo só existe em saídas de um teste e não pode repetir. */
+    if (source.type !== "teste") {
+
+        edge.label = "";
+
+    } else if (
+        edge.label &&
+        machine.edges.some(
+            other =>
+                other.id !== edge.id &&
+                other.from === from &&
+                other.label === edge.label
+        )
+    ) {
+
+        edge.label = "";
+
+    }
+
+    return true;
+
+}
 
 
-    element.addEventListener(
-        "pointerup",
-        event => {
+/* ---------- SELEÇÃO POR RETÂNGULO ---------- */
 
-            dragging =
-                false;
+function startMarquee(event, point) {
+
+    if (machine.connectionMode) {
+        return;
+    }
+
+    const additive = isAdditive(event);
+
+    drag = {
+        type: "marquee",
+        startX: point.x,
+        startY: point.y,
+        moved: false,
+        additive,
+        baseNodes: additive ? new Set(selection.nodes) : new Set(),
+        baseEdges: additive ? new Set(selection.edges) : new Set()
+    };
+
+}
 
 
-            try {
+function updateMarquee(point) {
 
-                element.releasePointerCapture(
-                    event.pointerId
-                );
+    if (!drag.moved) {
 
-            } catch (_) {}
-
-
-            element.style.cursor =
-                "grab";
-
+        if (
+            Math.hypot(point.x - drag.startX, point.y - drag.startY) <
+            DRAG_THRESHOLD
+        ) {
+            return;
         }
-    );
+
+        drag.moved = true;
+
+        selectionBox.style.display = "block";
+
+    }
+
+    const maxX = canvas.clientWidth;
+    const maxY = canvas.clientHeight;
+
+    const clamp = (value, max) => Math.max(0, Math.min(max, value));
+
+    const rect = {
+        left: clamp(Math.min(point.x, drag.startX), maxX),
+        right: clamp(Math.max(point.x, drag.startX), maxX),
+        top: clamp(Math.min(point.y, drag.startY), maxY),
+        bottom: clamp(Math.max(point.y, drag.startY), maxY)
+    };
+
+    selectionBox.style.left = rect.left + "px";
+    selectionBox.style.top = rect.top + "px";
+    selectionBox.style.width = (rect.right - rect.left) + "px";
+    selectionBox.style.height = (rect.bottom - rect.top) + "px";
+
+    const hits = findItemsInRect(rect);
+
+    const nodes = new Set(drag.baseNodes);
+    const edges = new Set(drag.baseEdges);
+
+    hits.nodes.forEach(id => nodes.add(id));
+    hits.edges.forEach(id => edges.add(id));
+
+    if (
+        !sameSet(nodes, selection.nodes) ||
+        !sameSet(edges, selection.edges)
+    ) {
+
+        selection.nodes = nodes;
+        selection.edges = edges;
+
+        refreshProperties();
+        render();
+
+    }
+
+}
 
 
-    element.addEventListener(
-        "pointercancel",
-        () => {
+function pointInRect(x, y, rect) {
 
-            dragging =
-                false;
-
-
-            element.style.cursor =
-                "grab";
-
-        }
+    return (
+        x >= rect.left &&
+        x <= rect.right &&
+        y >= rect.top &&
+        y <= rect.bottom
     );
 
 }
 
 
-/* =========================================================
-   ARRASTAR PONTO DE CONTROLE
-   ========================================================= */
+/* Seleciona tudo o que o retângulo toca (como no Windows). */
 
-function setupEdgeHandle(
-    handle,
-    edge
-) {
+function findItemsInRect(rect) {
 
-    let dragging =
-        false;
+    const nodes = [];
+    const edges = [];
+
+    machine.nodes.forEach(node => {
+
+        const size = getNodeSize(node);
+
+        const touches =
+            node.x <= rect.right &&
+            node.x + size.width >= rect.left &&
+            node.y <= rect.bottom &&
+            node.y + size.height >= rect.top;
+
+        if (touches) {
+            nodes.push(node.id);
+        }
+
+    });
+
+    machine.edges.forEach(edge => {
+
+        const g = getEdgeGeometry(edge);
+
+        if (!g) {
+            return;
+        }
+
+        for (let i = 0; i <= 30; i++) {
+
+            const t = i / 30;
+            const u = 1 - t;
+
+            const x = u * u * g.start.x + 2 * t * u * g.control.x + t * t * g.end.x;
+            const y = u * u * g.start.y + 2 * t * u * g.control.y + t * t * g.end.y;
+
+            if (pointInRect(x, y, rect)) {
+                edges.push(edge.id);
+                break;
+            }
+
+        }
+
+    });
+
+    return { nodes, edges };
+
+}
 
 
-    handle.addEventListener(
-        "pointerdown",
-        event => {
+/* ---------- SOLTAR O MOUSE ---------- */
+
+function endDrag(event) {
+
+    if (!drag) {
+        return;
+    }
+
+    const finished = drag;
+
+    drag = null;
+
+    try {
+        canvas.releasePointerCapture(event.pointerId);
+    } catch (_) {}
+
+    const cancelled = event.type === "pointercancel";
+
+    switch (finished.type) {
+
+        case "connect": {
+
+            removeConnectionPreview();
+
+            const target = getNodeUnderMouse(event);
+
+            const sourceId = machine.connectionStart;
+
+            machine.connectionStart = null;
+
+            if (!cancelled && target && target.id !== sourceId) {
+                createEdge(sourceId, target.id);
+            }
+
+            break;
+
+        }
+
+        case "nodes":
+
+            /* Clique simples num item de um grupo: fica só ele. */
+            if (!finished.moved && finished.multi && !isAdditive(event)) {
+                selectNode(finished.clickedId);
+            }
+
+            break;
+
+        case "edge":
+
+            if (!finished.moved && finished.multi && !isAdditive(event)) {
+                selectEdge(finished.edgeId);
+            }
+
+            break;
+
+        case "reconnect": {
+
+            const preview = reconnectPreview;
+
+            reconnectPreview = null;
+
+            const edge = machine.edges.find(e => e.id === finished.edgeId);
 
             if (
-                event.button !== 0
+                !cancelled &&
+                finished.moved &&
+                edge &&
+                preview &&
+                preview.hover
             ) {
 
-                return;
+                const from = finished.end === "from" ? preview.hover.id : edge.from;
+                const to = finished.end === "to" ? preview.hover.id : edge.to;
+
+                tryReconnectEdge(edge, from, to);
 
             }
 
+            render();
 
-            saveHistory();
+            refreshProperties();
 
-
-            dragging =
-                true;
-
-
-            try {
-
-                handle.setPointerCapture(
-                    event.pointerId
-                );
-
-            } catch (_) {}
-
-
-            handle.style.cursor =
-                "grabbing";
-
-
-            event.preventDefault();
-
-            event.stopPropagation();
+            break;
 
         }
-    );
 
+        case "marquee":
 
-    handle.addEventListener(
-        "pointermove",
-        event => {
+            selectionBox.style.display = "none";
 
-            if (!dragging) {
-
-                return;
-
+            /* Clique no fundo (sem arrastar) limpa a seleção. */
+            if (!finished.moved && !finished.additive) {
+                clearSelection();
             }
 
+            break;
 
-            const rect =
-                canvas.getBoundingClientRect();
-
-
-            const mouseX =
-                event.clientX -
-                rect.left;
-
-
-            const mouseY =
-                event.clientY -
-                rect.top;
-
-
-            const source =
-                machine.nodes.find(
-                    n =>
-                        n.id ===
-                        edge.from
-                );
-
-
-            const target =
-                machine.nodes.find(
-                    n =>
-                        n.id ===
-                        edge.to
-                );
-
-
-            if (
-                !source ||
-                !target
-            ) {
-
-                return;
-
-            }
-
-
-            const sourceCenter =
-                nodeCenter(
-                    source
-                );
-
-
-            const targetCenter =
-                nodeCenter(
-                    target
-                );
-
-
-            const start =
-                getConnectionPoint(
-                    source,
-                    targetCenter.x,
-                    targetCenter.y
-                );
-
-
-            const end =
-                getConnectionPoint(
-                    target,
-                    sourceCenter.x,
-                    sourceCenter.y
-                );
-
-
-            const middleX =
-                (
-                    start.x +
-                    end.x
-                ) / 2;
-
-
-            const middleY =
-                (
-                    start.y +
-                    end.y
-                ) / 2;
-
-
-            edge.bendOffsetX =
-                mouseX -
-                middleX;
-
-
-            edge.bendOffsetY =
-                mouseY -
-                middleY;
-
-
-            renderEdges();
-
-        }
-    );
-
-
-    handle.addEventListener(
-        "pointerup",
-        event => {
-
-            dragging =
-                false;
-
-
-            try {
-
-                handle.releasePointerCapture(
-                    event.pointerId
-                );
-
-            } catch (_) {}
-
-
-            handle.style.cursor =
-                "grab";
-
-        }
-    );
-
-
-    handle.addEventListener(
-        "pointercancel",
-        () => {
-
-            dragging =
-                false;
-
-
-            handle.style.cursor =
-                "grab";
-
-        }
-    );
+    }
 
 }
 
@@ -2685,434 +2728,282 @@ function showNodeProperties() {
 
 /* =========================================================
    PROPRIEDADES DA CONEXÃO
+   (agora dá para trocar origem, destino, símbolo e curva
+   a qualquer momento)
    ========================================================= */
+
+function nodeOptionLabel(node) {
+
+    return `#${node.id} · ${getNodeLabel(node)}`;
+
+}
+
 
 function showEdgeProperties() {
 
-    const edge =
-        machine.edges.find(
-            e =>
-                e.id ===
-                machine.selectedEdge
-        );
-
+    const edge = machine.edges.find(e => e.id === machine.selectedEdge);
 
     if (!edge) {
-
-        properties.innerHTML =
-            `
-            <p class="empty">
-                Selecione uma operação ou conexão.
-            </p>
-            `;
-
+        properties.innerHTML = EMPTY_PROPERTIES_HTML;
         return;
-
     }
 
+    const source = machine.nodes.find(n => n.id === edge.from);
+    const target = machine.nodes.find(n => n.id === edge.to);
 
-    const source =
-        machine.nodes.find(
-            n =>
-                n.id ===
-                edge.from
-        );
-
-
-    const target =
-        machine.nodes.find(
-            n =>
-                n.id ===
-                edge.to
-        );
-
-
-    if (
-        !source ||
-        !target
-    ) {
-
+    if (!source || !target) {
         return;
-
     }
 
+    const isTest = source.type === "teste";
 
-    /*
-     ========================================================
-     SAÍDA DE UM TESTE
-     ========================================================
-    */
+    const options = machine.nodes
+        .map(n => `<option value="${n.id}">${nodeOptionLabel(n)}</option>`)
+        .join("");
 
-    if (
-        source.type ===
-        "teste"
-    ) {
+    let html = `
+        <div class="property">
+            <label>Origem</label>
+            <select id="edgeFrom">${options}</select>
+        </div>
 
-        properties.innerHTML = `
+        <div class="property">
+            <label>Destino</label>
+            <select id="edgeTo">${options}</select>
+        </div>
+    `;
 
+    if (isTest) {
+
+        html += `
             <div class="property">
-
-                <label>
-                    Conexão
-                </label>
-
-                <div
-                    style="
-                        background:#f5f5f5;
-                        padding:8px;
-                        border-radius:5px;
-                        margin-top:5px;
-                    "
-                >
-
-                    X ← ler(X)
-
-                    →
-
-                    ${getNodeLabel(target)}
-
-                </div>
-
-            </div>
-
-
-            <div class="property">
-
-                <label>
-                    Símbolo da saída
-                </label>
-
-                <select
-                    id="edgeLabel"
-                    style="width:100%;">
-
-                    <option value="">
-                        Selecione...
-                    </option>
-
-                    <option value="0">
-                        0
-                    </option>
-
-                    <option value="1">
-                        1
-                    </option>
-
-                    <option value="#">
-                        #
-                    </option>
-
-                    <option value="ε">
-                        ε
-                    </option>
-
+                <label>Símbolo da saída</label>
+                <select id="edgeLabel">
+                    <option value="">Selecione...</option>
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="#">#</option>
+                    <option value="ε">ε</option>
                 </select>
-
             </div>
-
-
-            <button
-                id="deleteEdgeButton"
-                style="width:100%;">
-
-                🗑 Excluir conexão
-
-            </button>
-
         `;
 
+    } else {
 
-        const select =
-            document.getElementById(
-                "edgeLabel"
-            );
+        html += `
+            <div class="property">
+                <small>Esta conexão não precisa de símbolo.</small>
+            </div>
+        `;
+
+    }
+
+    html += `
+        <div class="property">
+            <small>
+                Arraste a seta para curvá-la. Arraste as bolinhas
+                azuis das pontas para ligar a outro estado.
+            </small>
+        </div>
+
+        <button id="reverseEdgeButton" style="width:100%;margin-bottom:6px;">
+            ⇄ Inverter sentido
+        </button>
+
+        <button id="resetBendButton" style="width:100%;margin-bottom:6px;">
+            ↺ Resetar curva
+        </button>
+
+        <button id="deleteEdgeButton" style="width:100%;">
+            🗑 Excluir conexão
+        </button>
+    `;
+
+    properties.innerHTML = html;
 
 
-        select.value =
-            edge.label;
+    /* ---------- ORIGEM / DESTINO ---------- */
+
+    const fromSelect = document.getElementById("edgeFrom");
+    const toSelect = document.getElementById("edgeTo");
+
+    fromSelect.value = edge.from;
+    toSelect.value = edge.to;
+
+    function applyEndpoints(from, to) {
+
+        if (!tryReconnectEdge(edge, from, to)) {
+
+            fromSelect.value = edge.from;
+            toSelect.value = edge.to;
+
+            return;
+
+        }
+
+        render();
+
+        showEdgeProperties();
+
+    }
+
+    fromSelect.addEventListener("change", () => {
+        applyEndpoints(Number(fromSelect.value), edge.to);
+    });
+
+    toSelect.addEventListener("change", () => {
+        applyEndpoints(edge.from, Number(toSelect.value));
+    });
 
 
-        select.addEventListener(
-            "change",
-            () => {
+    /* ---------- SÍMBOLO (saída de teste) ---------- */
 
-                const newValue =
-                    select.value;
+    const labelSelect = document.getElementById("edgeLabel");
 
+    if (labelSelect) {
 
-                if (
-                    newValue === ""
-                ) {
+        labelSelect.value = edge.label;
 
-                    return;
+        labelSelect.addEventListener("change", () => {
 
-                }
+            const newValue = labelSelect.value;
 
+            if (newValue === edge.label) {
+                return;
+            }
 
-                /*
-                 Impede duas saídas iguais
-                 saindo do mesmo teste.
-                */
-
-                const duplicate =
-                    machine.edges.some(
-                        other =>
-
-                            other.id !==
-                                edge.id &&
-
-                            other.from ===
-                                edge.from &&
-
-                            other.label ===
-                                newValue
+            const other =
+                newValue === ""
+                    ? null
+                    : machine.edges.find(
+                        o =>
+                            o.id !== edge.id &&
+                            o.from === edge.from &&
+                            o.label === newValue
                     );
 
+            if (other) {
 
-                if (
-                    duplicate
-                ) {
+                const ok = confirm(
+                    `Já existe uma saída "${newValue}" neste teste.\n` +
+                    `Trocar os símbolos entre as duas conexões?`
+                );
 
-                    alert(
-                        `Já existe uma saída "${newValue}" para este teste.`
-                    );
-
-
-                    select.value =
-                        edge.label;
-
-
+                if (!ok) {
+                    labelSelect.value = edge.label;
                     return;
-
                 }
 
+            }
 
-                saveHistory();
+            saveHistory();
+
+            if (other) {
+                other.label = edge.label;
+            }
+
+            edge.label = newValue;
+
+            renderEdges();
+
+            showEdgeProperties();
+
+        });
+
+    }
 
 
-                edge.label =
-                    newValue;
+    /* ---------- BOTÕES ---------- */
 
+    document
+        .getElementById("reverseEdgeButton")
+        .addEventListener("click", () => {
 
-                renderEdges();
+            if (tryReconnectEdge(edge, edge.to, edge.from)) {
 
+                render();
 
                 showEdgeProperties();
 
             }
-        );
 
-    } else {
+        });
 
-        /*
-         ====================================================
-         CONEXÃO NORMAL
-         ====================================================
-        */
+    document
+        .getElementById("resetBendButton")
+        .addEventListener("click", () => {
 
-        properties.innerHTML = `
+            saveHistory();
 
-            <div class="property">
+            const index = machine.edges.filter(
+                o =>
+                    o.id !== edge.id &&
+                    o.from === edge.from &&
+                    o.to === edge.to
+            ).length;
 
-                <label>
-                    Conexão
-                </label>
+            edge.bendOffsetX = 0;
+            edge.bendOffsetY = [0, 30, -30, 45][index] ?? 0;
 
-                <div
-                    style="
-                        background:#f5f5f5;
-                        padding:8px;
-                        border-radius:5px;
-                        margin-top:5px;
-                    "
-                >
+            renderEdges();
 
-                    ${getNodeLabel(source)}
+        });
 
-                    →
-
-                    ${getNodeLabel(target)}
-
-                </div>
-
-            </div>
-
-
-            <div class="property">
-
-                <small>
-                    Esta conexão não precisa
-                    de símbolo.
-                </small>
-
-            </div>
-
-
-            <button
-                id="deleteEdgeButton"
-                style="width:100%;">
-
-                🗑 Excluir conexão
-
-            </button>
-
-        `;
-
-    }
-
-
-    const deleteButton =
-        document.getElementById(
-            "deleteEdgeButton"
-        );
-
-
-    if (deleteButton) {
-
-        deleteButton.addEventListener(
-            "click",
-            () => {
-
-                deleteSelectedEdge();
-
-            }
-        );
-
-    }
+    document
+        .getElementById("deleteEdgeButton")
+        .addEventListener("click", deleteSelected);
 
 }
 
 
 /* =========================================================
-   EXCLUIR ESTADO
-   ========================================================= */
-
-function deleteSelectedNode() {
-
-    if (
-        machine.selectedNode ===
-        null
-    ) {
-
-        return;
-
-    }
-
-
-    saveHistory();
-
-
-    const id =
-        machine.selectedNode;
-
-
-    machine.nodes =
-        machine.nodes.filter(
-            node =>
-                node.id !==
-                id
-        );
-
-
-    machine.edges =
-        machine.edges.filter(
-            edge =>
-
-                edge.from !==
-                    id &&
-
-                edge.to !==
-                    id
-        );
-
-
-    machine.selectedNode =
-        null;
-
-
-    properties.innerHTML =
-        `
-        <p class="empty">
-            Selecione uma operação ou conexão.
-        </p>
-        `;
-
-
-    render();
-
-}
-
-
-/* =========================================================
-   EXCLUIR CONEXÃO
-   ========================================================= */
-
-function deleteSelectedEdge() {
-
-    if (
-        machine.selectedEdge ===
-        null
-    ) {
-
-        return;
-
-    }
-
-
-    saveHistory();
-
-
-    machine.edges =
-        machine.edges.filter(
-            edge =>
-                edge.id !==
-                machine.selectedEdge
-        );
-
-
-    machine.selectedEdge =
-        null;
-
-
-    properties.innerHTML =
-        `
-        <p class="empty">
-            Selecione uma operação ou conexão.
-        </p>
-        `;
-
-
-    render();
-
-}
-
-
-/* =========================================================
-   EXCLUIR SELECIONADO
+   EXCLUIR (estados e conexões de uma vez)
    ========================================================= */
 
 function deleteSelected() {
 
-    if (
-        machine.selectedNode !==
-        null
-    ) {
-
-        deleteSelectedNode();
-
+    if (selectionCount() === 0) {
         return;
-
     }
 
+    saveHistory();
 
-    if (
-        machine.selectedEdge !==
-        null
-    ) {
+    const nodeIds = new Set(selection.nodes);
+    const edgeIds = new Set(selection.edges);
 
-        deleteSelectedEdge();
+    machine.nodes = machine.nodes.filter(n => !nodeIds.has(n.id));
 
+    machine.edges = machine.edges.filter(
+        e =>
+            !edgeIds.has(e.id) &&
+            !nodeIds.has(e.from) &&
+            !nodeIds.has(e.to)
+    );
+
+    if (machine.currentNode !== null && nodeIds.has(machine.currentNode)) {
+        machine.currentNode = null;
     }
+
+    selection.nodes.clear();
+    selection.edges.clear();
+
+    properties.innerHTML = EMPTY_PROPERTIES_HTML;
+
+    render();
+
+}
+
+
+function deleteSelectedNode() {
+
+    deleteSelected();
+
+}
+
+
+function deleteSelectedEdge() {
+
+    deleteSelected();
 
 }
 
@@ -3121,147 +3012,99 @@ function deleteSelected() {
    TECLADO
    ========================================================= */
 
-document.addEventListener(
-    "keydown",
-    event => {
+document.addEventListener("keydown", event => {
 
-        /*
-         CTRL + Z
-        */
+    const active = document.activeElement;
 
-        if (
-            event.ctrlKey &&
-            event.key.toLowerCase() ===
-                "z"
-        ) {
+    const tag = active ? active.tagName : "";
 
-            const active =
-                document.activeElement;
+    const typing = tag === "INPUT" || tag === "TEXTAREA";
 
+    const typingOrSelect = typing || tag === "SELECT";
 
-            if (
-                active &&
-                (
-                    active.tagName ===
-                        "INPUT" ||
+    const key = event.key.toLowerCase();
 
-                    active.tagName ===
-                        "TEXTAREA"
-                )
-            ) {
+    const mod = event.ctrlKey || event.metaKey;
 
-                return;
+    /* CTRL + Z */
+    if (mod && key === "z") {
 
-            }
-
-
-            event.preventDefault();
-
-
-            undo();
-
-
+        if (typing) {
             return;
-
         }
 
+        event.preventDefault();
 
-        /*
-         DELETE
-        */
+        undo();
 
-        if (
-            event.key ===
-                "Delete" ||
-
-            event.key ===
-                "Backspace"
-        ) {
-
-            const active =
-                document.activeElement;
-
-
-            if (
-                active &&
-                (
-                    active.tagName ===
-                        "INPUT" ||
-
-                    active.tagName ===
-                        "SELECT" ||
-
-                    active.tagName ===
-                        "TEXTAREA"
-                )
-            ) {
-
-                return;
-
-            }
-
-
-            deleteSelected();
-
-        }
-
-
-        /*
-         ESC
-        */
-
-        if (
-            event.key ===
-            "Escape"
-        ) {
-
-            machine.connectionMode =
-                false;
-
-
-            machine.connectionStart =
-                null;
-
-
-            removeConnectionPreview();
-
-
-            machine.selectedNode =
-                null;
-
-
-            machine.selectedEdge =
-                null;
-
-
-            modeText.textContent =
-                "Modo: seleção";
-
-
-            modeText.classList.remove(
-                "connection-mode"
-            );
-
-
-            canvas.classList.remove(
-                "connection-active"
-            );
-
-
-            properties.innerHTML =
-                `
-                <p class="empty">
-                    Selecione uma operação ou conexão.
-                </p>
-                `;
-
-
-            render();
-
-        }
+        return;
 
     }
-);
+
+    /* CTRL + A */
+    if (mod && key === "a") {
+
+        if (typingOrSelect) {
+            return;
+        }
+
+        event.preventDefault();
+
+        selectAll();
+
+        return;
+
+    }
+
+    /* DELETE / BACKSPACE */
+    if (event.key === "Delete" || event.key === "Backspace") {
+
+        if (typingOrSelect) {
+            return;
+        }
+
+        if (selectionCount() === 0) {
+            return;
+        }
+
+        event.preventDefault();
+
+        deleteSelected();
+
+        return;
+
+    }
+
+    /* ESC */
+    if (event.key === "Escape") {
+
+        drag = null;
+
+        reconnectPreview = null;
+
+        selectionBox.style.display = "none";
+
+        machine.connectionMode = false;
+        machine.connectionStart = null;
+
+        removeConnectionPreview();
+
+        selection.nodes.clear();
+        selection.edges.clear();
+
+        modeText.textContent = "Modo: seleção";
+
+        modeText.classList.remove("connection-mode");
+
+        canvas.classList.remove("connection-active");
+
+        properties.innerHTML = EMPTY_PROPERTIES_HTML;
+
+        render();
+
+    }
+
+});
 
 
 /* =========================================================
@@ -4500,54 +4343,6 @@ function loadExample() {
     setInputWord();
 
 }
-
-
-/* =========================================================
-   CLIQUE NO FUNDO
-   ========================================================= */
-
-canvas.addEventListener(
-    "mousedown",
-    event => {
-
-        if (
-            event.target ===
-                canvas ||
-            event.target ===
-                nodesContainer
-        ) {
-
-            if (
-                machine.connectionMode
-            ) {
-
-                return;
-
-            }
-
-
-            machine.selectedNode =
-                null;
-
-
-            machine.selectedEdge =
-                null;
-
-
-            properties.innerHTML =
-                `
-                <p class="empty">
-                    Selecione uma operação ou conexão.
-                </p>
-                `;
-
-
-            render();
-
-        }
-
-    }
-);
 
 
 /* =========================================================
