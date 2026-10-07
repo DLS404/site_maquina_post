@@ -385,6 +385,26 @@ aside {
     gap: 6px;
 }
 
+.speed {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    margin-top: 10px;
+
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.speed select {
+    flex: 1;
+
+    padding: 6px;
+
+    border: 1px solid #bbb;
+    border-radius: 5px;
+}
+
 .status {
     margin-top: 10px;
 

@@ -126,6 +126,17 @@
 
             </div>
 
+            <div class="speed">
+                <label for="speedSelect">Velocidade</label>
+                <select id="speedSelect" onchange="changeSpeed()">
+                    <option value="1000">Lenta (1 s)</option>
+                    <option value="500" selected>Normal (0,5 s)</option>
+                    <option value="150">Rápida</option>
+                    <option value="40">Muito rápida</option>
+                    <option value="5">Máxima</option>
+                </select>
+            </div>
+
             <div id="executionStatus" class="status">
                 Máquina parada.
             </div>

@@ -3218,24 +3218,36 @@ function validateMachine() {
     }
 
 
-    const markers =
-        machine.nodes.filter(
-            n =>
-                n.type ===
-                "marcador"
+    /*
+       Só o teste pode ter várias saídas (uma por símbolo).
+       Qualquer outra instrução com mais de uma saída
+       é ambígua.
+    */
+
+    machine.nodes.forEach(node => {
+
+        if (
+            node.type === "teste" ||
+            node.type === "aceita" ||
+            node.type === "rejeita"
+        ) {
+            return;
+        }
+
+        const outgoing = machine.edges.filter(
+            edge => edge.from === node.id
         );
 
+        if (outgoing.length > 1) {
 
-    if (
-        markers.length ===
-        0
-    ) {
+            errors.push(
+                `${getNodeLabel(node)} (#${node.id}) possui ` +
+                `${outgoing.length} saídas. Só o teste pode ter várias.`
+            );
 
-        warnings.push(
-            "A máquina não possui a instrução X ← X#."
-        );
+        }
 
-    }
+    });
 
 
     const tests =
@@ -3545,6 +3557,27 @@ function stepMachine() {
      ========================================================
     */
 
+    /*
+     ========================================================
+     AMBIGUIDADE: instrução (não-teste) com várias saídas
+     ========================================================
+    */
+
+    if (
+        current.type !== "teste" &&
+        machine.edges.filter(e => e.from === current.id).length > 1
+    ) {
+
+        executionStatus.textContent =
+            "Erro: esta instrução possui mais de uma saída.";
+
+        machine.running = false;
+
+        return false;
+
+    }
+
+
     if (
         current.type ===
         "marcador"
@@ -3620,7 +3653,7 @@ function stepMachine() {
         if (!next) {
 
             executionStatus.textContent =
-                `Não existe saída para "${symbol}".`;
+                `✗ Palavra rejeitada: o teste não possui saída para "${symbol}".`;
 
 
             machine.running =
@@ -3688,95 +3721,95 @@ function stepMachine() {
    EXECUÇÃO AUTOMÁTICA
    ========================================================= */
 
-function executeMachine() {
+const MAX_STEPS = 10000;
 
-    if (
-        machine.running
-    ) {
+machine.steps = 0;
+
+
+function getStepDelay() {
+
+    const select = document.getElementById("speedSelect");
+
+    const value = select ? Number(select.value) : 500;
+
+    return value > 0 ? value : 500;
+
+}
+
+
+function runTick() {
+
+    if (!machine.running) {
+        return;
+    }
+
+    const result = stepMachine();
+
+    machine.steps++;
+
+    if (!result) {
+
+        clearInterval(machine.timer);
+
+        machine.timer = null;
+
+        machine.running = false;
 
         return;
 
     }
 
+    if (machine.steps >= MAX_STEPS) {
 
-    machine.running =
-        true;
+        clearInterval(machine.timer);
 
+        machine.timer = null;
 
-    executionStatus.textContent =
-        "Executando...";
+        machine.running = false;
 
+        executionStatus.textContent =
+            "⚠ Limite de passos atingido. Possível loop infinito.";
 
-    let steps =
-        0;
+    }
 
-
-    machine.timer =
-        setInterval(
-            () => {
-
-                if (
-                    !machine.running
-                ) {
-
-                    return;
-
-                }
+}
 
 
-                const result =
-                    stepMachine();
+function startTimer() {
+
+    if (machine.timer) {
+        clearInterval(machine.timer);
+    }
+
+    machine.timer = setInterval(runTick, getStepDelay());
+
+}
 
 
-                steps++;
+function executeMachine() {
+
+    if (machine.running) {
+        return;
+    }
+
+    machine.running = true;
+
+    machine.steps = 0;
+
+    executionStatus.textContent = "Executando...";
+
+    startTimer();
+
+}
 
 
-                if (!result) {
+/* Trocar a velocidade vale na hora, mesmo com a máquina rodando. */
 
-                    clearInterval(
-                        machine.timer
-                    );
+function changeSpeed() {
 
-
-                    machine.timer =
-                        null;
-
-
-                    machine.running =
-                        false;
-
-
-                    return;
-
-                }
-
-
-                if (
-                    steps >=
-                    10000
-                ) {
-
-                    clearInterval(
-                        machine.timer
-                    );
-
-
-                    machine.timer =
-                        null;
-
-
-                    machine.running =
-                        false;
-
-
-                    executionStatus.textContent =
-                        "⚠ Limite de passos atingido. Possível loop infinito.";
-
-                }
-
-            },
-            500
-        );
+    if (machine.running) {
+        startTimer();
+    }
 
 }
 
