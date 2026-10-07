@@ -237,13 +237,24 @@ main {
 .node.aceita {
     border-radius: 50%;
     border-width: 4px;
-    border-color: #444 !important;
 }
 
 .node.rejeita {
     border-radius: 50%;
     border-width: 4px;
-    background: #fff5f5;
+    background: white;
+}
+
+/* Rejeita só fica vermelho quando a execução termina nele */
+.node.rejeita.current {
+    background: #ffcdd2;
+}
+
+/* Aceita e Rejeita mantêm a mesma cor de borda, mesmo quando
+   são o estado atual (o fundo verde ainda indica que a execução chegou aqui) */
+.node.aceita:not(.selected),
+.node.rejeita:not(.selected) {
+    border-color: #444;
 }
 
 /* ALÇAS DA SETA SELECIONADA (camada acima dos estados) */
