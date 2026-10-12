@@ -505,3 +505,139 @@ body:has(#canvas.connection-active) button[onclick="startConnectionMode()"] {
     }
 
 }
+
+/* =========================================================
+   MOBILE / TOUCH
+   ========================================================= */
+
+/* área rolável que contém o canvas (permite canvas maior que a tela) */
+.canvas-scroll {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+#canvas {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+}
+
+button {
+    touch-action: manipulation;
+}
+
+.touch-only {
+    display: none;
+}
+
+.touch-hint {
+    display: none;
+    margin: 0;
+    padding: 6px 12px;
+    font-size: 12px;
+    color: #555;
+    background: #f7f9fc;
+    border-bottom: 1px solid #ddd;
+}
+
+button.toggle-on {
+    background: #1976d2;
+    border-color: #0d47a1;
+    color: #fff;
+    font-weight: bold;
+}
+
+/* em telas de toque o :hover "gruda" depois do toque */
+@media (hover: none) {
+    button:hover {
+        background: #fff;
+    }
+
+    button.toggle-on:hover {
+        background: #1976d2;
+    }
+}
+
+@media (pointer: coarse), (max-width: 1000px) {
+
+    .touch-only {
+        display: inline-block;
+    }
+
+    .touch-hint {
+        display: block;
+    }
+
+}
+
+@media (max-width: 1000px) {
+
+    header {
+        padding: 12px 15px;
+    }
+
+    header h1 {
+        font-size: 20px;
+    }
+
+    .toolbar {
+        padding: 8px 10px;
+        gap: 8px;
+    }
+
+    .tool-group {
+        width: 100%;
+        gap: 6px;
+    }
+
+    .tool-group button {
+        flex: 1 1 auto;
+    }
+
+    button {
+        min-height: 42px;
+    }
+
+    main {
+        padding: 8px;
+        gap: 10px;
+    }
+
+    .editor-title {
+        height: auto;
+        min-height: 42px;
+        padding: 8px 10px;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    #modeText {
+        font-size: 13px;
+        padding: 5px 10px;
+    }
+
+    /* o canvas é maior que a tela: o fundo arrasta para navegar */
+    .canvas-scroll {
+        max-height: 60vh;
+        max-height: 60dvh;
+    }
+
+    #canvas {
+        min-width: 780px;
+        height: 560px;
+    }
+
+    .panel {
+        padding: 12px;
+    }
+
+    /* 16px evita o zoom automático do iOS ao focar um campo */
+    .property input,
+    .property select,
+    .queue-input input,
+    .speed select {
+        font-size: 16px;
+        min-height: 40px;
+    }
+
+}

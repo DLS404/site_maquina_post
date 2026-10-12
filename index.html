@@ -27,6 +27,8 @@
     <div class="tool-group">
         <button onclick="startConnectionMode()">🔗 Conectar</button>
         <button onclick="deleteSelected()">🗑 Excluir</button>
+        <button onclick="undo()">↶ Desfazer</button>
+        <button id="selectModeButton" class="touch-only" onclick="toggleSelectMode()">▭ Selecionar área</button>
         <button onclick="newMachine()">📄 Nova máquina</button>
         <button onclick="loadExample()">💡 Exemplo</button>
     </div>
@@ -42,6 +44,9 @@
             <span id="modeText">Modo: seleção</span>
         </div>
 
+        <p class="touch-hint">Arraste o fundo para mover a tela. Arraste um estado para movê-lo.</p>
+
+        <div id="canvasScroll" class="canvas-scroll">
         <div id="canvas">
 
             <svg id="connections">
@@ -63,6 +68,7 @@
 
             <div id="nodes"></div>
 
+        </div>
         </div>
 
     </section>

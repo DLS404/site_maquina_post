@@ -216,6 +216,12 @@ const validationResult =
 const modeText =
     document.getElementById("modeText");
 
+const canvasScroll =
+    document.getElementById("canvasScroll");
+
+const isTouchDevice =
+    () => window.matchMedia("(pointer: coarse)").matches;
+
 
 /* =========================================================
    NOMES DOS TIPOS
@@ -575,9 +581,21 @@ function getEdgeGeometry(edge) {
 
 function addNode(
     type,
-    x = 100,
-    y = 100
+    x,
+    y
 ) {
+
+    if (x === undefined || y === undefined) {
+
+        /* aparece na parte visível da área (mesmo com a tela rolada)
+           e escalonado, para não empilhar tudo no mesmo lugar */
+        const offset = (machine.nodes.length % 6) * 24;
+
+        x = canvasScroll.scrollLeft + 40 + offset;
+        y = canvasScroll.scrollTop + 40 + offset;
+
+    }
+
 
     saveHistory();
 
@@ -1547,6 +1565,8 @@ function renderEdges() {
 
     createArrowMarker();
 
+    const coarse = isTouchDevice();
+
     const singleEdgeId =
         selection.edges.size === 1 && selection.nodes.size === 0
             ? [...selection.edges][0]
@@ -1575,7 +1595,7 @@ function renderEdges() {
             d,
             fill: "none",
             stroke: "transparent",
-            "stroke-width": "20",
+            "stroke-width": coarse ? "34" : "20",
             "pointer-events": "stroke"
         });
 
@@ -1653,9 +1673,9 @@ function renderEdges() {
         if (edge.id === singleEdgeId) {
 
             const handles = [
-                { role: "ctrl", x: control.x, y: control.y, cls: "edge-handle", r: 7 },
-                { role: "from", x: start.x, y: start.y, cls: "edge-end-handle", r: 6 },
-                { role: "to", x: end.x, y: end.y, cls: "edge-end-handle", r: 6 }
+                { role: "ctrl", x: control.x, y: control.y, cls: "edge-handle", r: coarse ? 12 : 7 },
+                { role: "from", x: start.x, y: start.y, cls: "edge-end-handle", r: coarse ? 11 : 6 },
+                { role: "to", x: end.x, y: end.y, cls: "edge-end-handle", r: coarse ? 11 : 6 }
             ];
 
             handles.forEach(h => {
@@ -1687,6 +1707,15 @@ function renderEdges() {
    ========================================================= */
 
 const DRAG_THRESHOLD = 3;
+
+/* toque longo no celular abre o menu do navegador: desativa */
+canvas.addEventListener("contextmenu", event => {
+
+    if (isTouchDevice()) {
+        event.preventDefault();
+    }
+
+});
 
 let drag = null;
 
@@ -1724,6 +1753,11 @@ function toggleInSelection(set, id) {
 canvas.addEventListener("pointerdown", event => {
 
     if (event.button !== 0) {
+        return;
+    }
+
+    /* ignora o segundo dedo */
+    if (!event.isPrimary) {
         return;
     }
 
@@ -1766,6 +1800,16 @@ canvas.addEventListener("pointerdown", event => {
         return;
     }
 
+    /* No toque, arrastar o fundo move a tela.
+       (a seleção por retângulo fica no botão "Selecionar área") */
+    if (
+        event.pointerType === "touch" &&
+        (!touchSelectMode || machine.connectionMode)
+    ) {
+        startPan(event);
+        return;
+    }
+
     startMarquee(event, point);
 
 });
@@ -1774,6 +1818,10 @@ canvas.addEventListener("pointerdown", event => {
 document.addEventListener("pointermove", event => {
 
     if (!drag) {
+        return;
+    }
+
+    if (!event.isPrimary) {
         return;
     }
 
@@ -1803,6 +1851,10 @@ document.addEventListener("pointermove", event => {
 
         case "marquee":
             updateMarquee(point);
+            break;
+
+        case "pan":
+            panCanvas(event);
             break;
 
     }
@@ -2279,6 +2331,64 @@ function tryReconnectEdge(edge, from, to) {
 }
 
 
+/* ---------- MOVER A TELA (TOQUE) ---------- */
+
+let touchSelectMode = false;
+
+
+function toggleSelectMode() {
+
+    touchSelectMode = !touchSelectMode;
+
+    const button = document.getElementById("selectModeButton");
+
+    if (button) {
+        button.classList.toggle("toggle-on", touchSelectMode);
+    }
+
+}
+
+
+function startPan(event) {
+
+    drag = {
+        type: "pan",
+        startX: event.clientX,
+        startY: event.clientY,
+        lastX: event.clientX,
+        lastY: event.clientY,
+        moved: false
+    };
+
+}
+
+
+function panCanvas(event) {
+
+    if (!drag.moved) {
+
+        if (
+            Math.hypot(
+                event.clientX - drag.startX,
+                event.clientY - drag.startY
+            ) < DRAG_THRESHOLD * 2
+        ) {
+            return;
+        }
+
+        drag.moved = true;
+
+    }
+
+    canvasScroll.scrollLeft -= event.clientX - drag.lastX;
+    canvasScroll.scrollTop -= event.clientY - drag.lastY;
+
+    drag.lastX = event.clientX;
+    drag.lastY = event.clientY;
+
+}
+
+
 /* ---------- SELEÇÃO POR RETÂNGULO ---------- */
 
 function startMarquee(event, point) {
@@ -2433,6 +2543,10 @@ function endDrag(event) {
         return;
     }
 
+    if (event.isPrimary === false) {
+        return;
+    }
+
     const finished = drag;
 
     drag = null;
@@ -2510,6 +2624,15 @@ function endDrag(event) {
             break;
 
         }
+
+        case "pan":
+
+            /* toque rápido no fundo limpa a seleção */
+            if (!finished.moved && !machine.connectionMode) {
+                clearSelection();
+            }
+
+            break;
 
         case "marquee":
 
@@ -4372,6 +4495,9 @@ function loadExample() {
 
     }
 
+
+    canvasScroll.scrollLeft = 0;
+    canvasScroll.scrollTop = 0;
 
     setInputWord();
 
