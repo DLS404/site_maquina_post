@@ -1,7 +1,7 @@
 /* PALETA — tons suaves, sem branco puro */
 
 :root {
-    color-scheme: light dark;
+    color-scheme: light;
 
     --page: #e8e4da;
     --surface: #f2efe7;
@@ -12,8 +12,28 @@
     --tint: rgba(46, 45, 42, 0.08);
 }
 
+/* escuro: automático (sistema) ou escolhido pelo botão */
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+
+    --page: #1b1c1e;
+    --surface: #232527;
+    --ink: #d6d4cd;
+    --muted: #8d8c86;
+    --line: #3a3d40;
+    --hover: #2e3134;
+    --tint: rgba(214, 212, 205, 0.10);
+}
+
+:root[data-theme="light"] {
+    color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
+        color-scheme: dark;
+
         --page: #1b1c1e;
         --surface: #232527;
         --ink: #d6d4cd;
@@ -42,6 +62,11 @@ body {
 header {
     padding: 16px 20px;
     border-bottom: 1px solid var(--ink);
+
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 header h1 {

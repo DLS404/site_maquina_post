@@ -5,12 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Máquina de Post</title>
     <link rel="stylesheet" href="style.css">
+    <script>
+        /* aplica o tema salvo antes de desenhar a página (evita piscar) */
+        try {
+            var savedTheme = localStorage.getItem("tema");
+            if (savedTheme) {
+                document.documentElement.setAttribute("data-theme", savedTheme);
+            }
+        } catch (e) {}
+    </script>
 </head>
 
 <body>
 
 <header>
     <h1>Máquina de Post</h1>
+    <button id="themeButton" onclick="toggleTheme()">Tema escuro</button>
 </header>
 
 <div class="toolbar">
@@ -165,6 +175,27 @@
 </main>
 
 <script src="script.js"></script>
+
+<script>
+    function currentTheme() {
+        return document.documentElement.getAttribute("data-theme") ||
+            (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    }
+
+    function updateThemeButton() {
+        document.getElementById("themeButton").textContent =
+            currentTheme() === "dark" ? "Tema claro" : "Tema escuro";
+    }
+
+    function toggleTheme() {
+        var next = currentTheme() === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        try { localStorage.setItem("tema", next); } catch (e) {}
+        updateThemeButton();
+    }
+
+    updateThemeButton();
+</script>
 
 </body>
 </html>
