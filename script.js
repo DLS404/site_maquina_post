@@ -1100,7 +1100,7 @@ function showMultiProperties() {
         </div>
 
         <button id="deleteSelectionButton" style="width:100%;">
-            🗑 Excluir seleção
+            Excluir seleção
         </button>
     `;
 
@@ -2767,7 +2767,7 @@ function showNodeProperties() {
             id="deleteNodeButton"
             style="width:100%;">
 
-            🗑 Excluir estado
+            Excluir estado
 
         </button>
 
@@ -2930,15 +2930,15 @@ function showEdgeProperties() {
         </div>
 
         <button id="reverseEdgeButton" style="width:100%;margin-bottom:6px;">
-            ⇄ Inverter sentido
+            Inverter sentido
         </button>
 
         <button id="resetBendButton" style="width:100%;margin-bottom:6px;">
-            ↺ Resetar curva
+            Resetar curva
         </button>
 
         <button id="deleteEdgeButton" style="width:100%;">
-            🗑 Excluir conexão
+            Excluir conexão
         </button>
     `;
 
@@ -3445,7 +3445,7 @@ function validateMachine() {
         validationResult.innerHTML =
             `
             <div class="success">
-                ✓ Estrutura básica válida.
+                Estrutura básica válida.
             </div>
             `;
 
@@ -3459,7 +3459,7 @@ function validateMachine() {
                     errors
                         .map(
                             error =>
-                                "✗ " +
+                                "" +
                                 error
                         )
                         .join(
@@ -3488,7 +3488,7 @@ function validateMachine() {
                     warnings
                         .map(
                             warning =>
-                                "⚠ " +
+                                "" +
                                 warning
                         )
                         .join(
@@ -3638,7 +3638,7 @@ function stepMachine() {
     ) {
 
         executionStatus.textContent =
-            "✓ Palavra aceita.";
+            "Palavra aceita.";
 
 
         machine.running =
@@ -3662,7 +3662,7 @@ function stepMachine() {
     ) {
 
         executionStatus.textContent =
-            "✗ Palavra rejeitada.";
+            "Palavra rejeitada.";
 
 
         machine.running =
@@ -3776,7 +3776,7 @@ function stepMachine() {
         if (!next) {
 
             executionStatus.textContent =
-                `✗ Palavra rejeitada: o teste não possui saída para "${symbol}".`;
+                `Palavra rejeitada: o teste não possui saída para "${symbol}".`;
 
 
             machine.running =
@@ -3891,7 +3891,7 @@ function runTick() {
         machine.running = false;
 
         executionStatus.textContent =
-            "⚠ Limite de passos atingido. Possível loop infinito.";
+            "Limite de passos atingido. Possível loop infinito.";
 
     }
 
