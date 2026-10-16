@@ -86,6 +86,45 @@
 
         <section class="panel">
 
+            <h2>Alfabeto</h2>
+
+            <div class="property">
+                <label for="alphabetInput">Símbolos (Σ)</label>
+                <input
+                    type="text"
+                    id="alphabetInput"
+                    placeholder="Ex.: a, b  ou  w, x, y, z"
+                    autocomplete="off">
+            </div>
+
+            <div class="property">
+                <label for="auxInput">Símbolo auxiliar</label>
+                <input
+                    type="text"
+                    id="auxInput"
+                    value="#"
+                    autocomplete="off">
+            </div>
+
+            <div class="property">
+                <label for="emptyInput">Palavra vazia</label>
+                <input
+                    type="text"
+                    id="emptyInput"
+                    value="ε"
+                    autocomplete="off">
+            </div>
+
+            <button onclick="applyAlphabet()" class="validate">
+                Confirmar
+            </button>
+
+            <div id="alphabetStatus" class="status"></div>
+
+        </section>
+
+        <section class="panel">
+
             <h2>Propriedades</h2>
 
             <div id="properties">

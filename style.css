@@ -266,19 +266,21 @@ main {
     color: var(--surface);
 }
 
-.node.partida {
-    border-radius: 50%;
-    min-width: 90px;
+/* Partida, Aceita e Rejeita: retângulos com cantos arredondados */
+
+.node.partida,
+.node.aceita,
+.node.rejeita {
+    border-radius: 12px;
+    min-width: 0;
+    min-height: 0;
 }
+
+/* Aceita: borda dupla */
 
 .node.aceita {
-    border-radius: 50%;
     border-style: double;
     border-width: 4px;
-}
-
-.node.rejeita {
-    border-radius: 50%;
 }
 
 /* ALÇAS DA SETA SELECIONADA (camada acima dos estados) */
@@ -621,4 +623,48 @@ button.toggle-on {
         min-height: 40px;
     }
 
+}
+
+
+/* =========================================================
+   ALFABETO E TRANSIÇÕES DO TESTE
+   ========================================================= */
+
+.status.error {
+    color: var(--ink);
+    font-weight: 600;
+}
+
+.transition-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+
+    margin-bottom: 6px;
+}
+
+.transition-symbol {
+    flex: 0 0 36px;
+
+    padding: 5px 0;
+
+    border: 1px solid var(--line);
+
+    text-align: center;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.transition-row select {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+}
+
+.transition-row.missing .transition-symbol {
+    border-color: var(--ink);
+    font-weight: 600;
+}
+
+.transition-row.missing select {
+    border-style: dashed;
 }

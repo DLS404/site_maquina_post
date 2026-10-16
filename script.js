@@ -33,6 +33,20 @@ const machine = {
 
 
 /* =========================================================
+   ALFABETO, SÍMBOLO AUXILIAR E PALAVRA VAZIA
+   (definidos pelo usuário no painel "Alfabeto")
+   ========================================================= */
+
+const DEFAULT_AUX = "#";
+const DEFAULT_EMPTY = "ε";
+
+machine.alphabet = [];
+machine.auxSymbol = DEFAULT_AUX;
+machine.emptySymbol = DEFAULT_EMPTY;
+machine.alphabetConfirmed = false;
+
+
+/* =========================================================
    SELEÇÃO MÚLTIPLA
    selectedNode / selectedEdge continuam funcionando:
    o getter devolve o item único selecionado (ou null) e
@@ -94,30 +108,25 @@ function saveHistory() {
 
     undoHistory.push({
 
-        nodes: JSON.parse(
-            JSON.stringify(machine.nodes)
-        ),
+        nodes: JSON.parse(JSON.stringify(machine.nodes)),
 
-        edges: JSON.parse(
-            JSON.stringify(machine.edges)
-        ),
+        edges: JSON.parse(JSON.stringify(machine.edges)),
 
-        nextNodeId:
-            machine.nextNodeId,
+        nextNodeId: machine.nextNodeId,
 
-        nextEdgeId:
-            machine.nextEdgeId
+        nextEdgeId: machine.nextEdgeId,
+
+        config: {
+            alphabet: [...machine.alphabet],
+            aux: machine.auxSymbol,
+            empty: machine.emptySymbol,
+            confirmed: machine.alphabetConfirmed
+        }
 
     });
 
-
-    if (
-        undoHistory.length >
-        MAX_UNDO
-    ) {
-
+    if (undoHistory.length > MAX_UNDO) {
         undoHistory.shift();
-
     }
 
 }
@@ -125,52 +134,34 @@ function saveHistory() {
 
 function undo() {
 
-    if (
-        undoHistory.length === 0
-    ) {
-
+    if (undoHistory.length === 0) {
         return;
-
     }
 
-
-    const previous =
-        undoHistory.pop();
-
+    const previous = undoHistory.pop();
 
     historyLocked = true;
 
+    machine.nodes = JSON.parse(JSON.stringify(previous.nodes));
 
-    machine.nodes =
-        JSON.parse(
-            JSON.stringify(
-                previous.nodes
-            )
+    machine.edges = JSON.parse(JSON.stringify(previous.edges));
+
+    machine.nextNodeId = previous.nextNodeId;
+
+    machine.nextEdgeId = previous.nextEdgeId;
+
+    if (previous.config) {
+        setAlphabetConfig(
+            previous.config.alphabet,
+            previous.config.aux,
+            previous.config.empty,
+            previous.config.confirmed
         );
+    }
 
+    machine.selectedNode = null;
 
-    machine.edges =
-        JSON.parse(
-            JSON.stringify(
-                previous.edges
-            )
-        );
-
-
-    machine.nextNodeId =
-        previous.nextNodeId;
-
-
-    machine.nextEdgeId =
-        previous.nextEdgeId;
-
-
-    machine.selectedNode =
-        null;
-
-    machine.selectedEdge =
-        null;
-
+    machine.selectedEdge = null;
 
     properties.innerHTML =
         `
@@ -179,9 +170,7 @@ function undo() {
         </p>
         `;
 
-
     render();
-
 
     historyLocked = false;
 
@@ -261,7 +250,7 @@ function getNodeSize(node) {
 
             return {
 
-                width: 82,
+                width: 96,
                 height: 52
 
             };
@@ -358,63 +347,6 @@ function getConnectionPoint(
 
             x: cx,
             y: cy
-
-        };
-
-    }
-
-
-    /*
-       Estados ovais.
-    */
-
-    if (
-        node.type === "partida" ||
-        node.type === "aceita" ||
-        node.type === "rejeita"
-    ) {
-
-        const rx =
-            size.width / 2;
-
-
-        const ry =
-            size.height / 2;
-
-
-        const denominator =
-            Math.sqrt(
-
-                (
-                    dx * dx
-                ) /
-                (
-                    rx * rx
-                )
-
-                +
-
-                (
-                    dy * dy
-                ) /
-                (
-                    ry * ry
-                )
-
-            );
-
-
-        return {
-
-            x:
-                cx +
-                dx /
-                denominator,
-
-            y:
-                cy +
-                dy /
-                denominator
 
         };
 
@@ -611,8 +543,7 @@ function addNode(
 
         y,
 
-        symbol:
-            "#"
+        symbol: machine.auxSymbol
 
     };
 
@@ -673,6 +604,11 @@ function renderNodes() {
         element.style.left = node.x + "px";
         element.style.top = node.y + "px";
 
+        const size = getNodeSize(node);
+
+        element.style.width = size.width + "px";
+        element.style.height = size.height + "px";
+
         element.textContent = getNodeLabel(node);
 
         nodesContainer.appendChild(element);
@@ -699,7 +635,7 @@ function getNodeLabel(node) {
 
         case "marcador":
 
-            return "X ← X#";
+            return `X ← X${machine.auxSymbol}`;
 
 
         case "teste":
@@ -2656,194 +2592,177 @@ function endDrag(event) {
 
 function showNodeProperties() {
 
-    const node =
-        machine.nodes.find(
-            n =>
-                n.id ===
-                machine.selectedNode
-        );
-
+    const node = machine.nodes.find(n => n.id === machine.selectedNode);
 
     if (!node) {
-
-        properties.innerHTML =
-            `
-            <p class="empty">
-                Selecione uma operação ou conexão.
-            </p>
-            `;
-
+        properties.innerHTML = EMPTY_PROPERTIES_HTML;
         return;
-
     }
 
+    const instruction =
+        node.type === "marcador"
+            ? getNodeLabel(node)
+            : nodeNames[node.type];
 
     let html = `
-
         <div class="property">
-
-            <label>
-                Instrução
-            </label>
-
-            <input
-                value="${nodeNames[node.type]}"
-                disabled>
-
+            <label>Instrução</label>
+            <input value="${escapeHtml(instruction)}" disabled>
         </div>
-
     `;
 
-
-    if (
-        node.type ===
-        "marcador"
-    ) {
-
+    if (node.type === "marcador") {
         html += `
-
             <div class="property">
-
                 <small>
-                    Acrescenta o símbolo #
-                    ao final da fila.
+                    Acrescenta o símbolo auxiliar
+                    ${escapeHtml(machine.auxSymbol)} ao final da fila.
                 </small>
-
             </div>
-
         `;
-
     }
 
-
-    if (
-        node.type ===
-        "atribuicao"
-    ) {
-
+    if (node.type === "atribuicao") {
         html += `
-
             <div class="property">
-
-                <label>
-                    Símbolo acrescentado
-                </label>
-
-                <select
-                    id="nodeSymbol">
-
-                    <option value="#">
-                        #
-                    </option>
-
-                    <option value="0">
-                        0
-                    </option>
-
-                    <option value="1">
-                        1
-                    </option>
-
-                    <option value="a">
-                        a
-                    </option>
-
-                    <option value="b">
-                        b
-                    </option>
-
+                <label>Símbolo acrescentado</label>
+                <select id="nodeSymbol">
+                    ${symbolOptionsHtml(assignableSymbols(), node.symbol)}
                 </select>
-
             </div>
-
         `;
-
     }
 
+    if (node.type === "teste") {
+
+        if (!machine.alphabetConfirmed) {
+
+            html += `
+                <div class="property">
+                    <small>
+                        Defina e confirme o alfabeto (painel Alfabeto)
+                        para configurar as transições deste teste.
+                    </small>
+                </div>
+            `;
+
+        } else {
+
+            const outgoing = machine.edges.filter(e => e.from === node.id);
+
+            const targetOptions =
+                `<option value="">— faltando —</option>` +
+                machine.nodes
+                    .filter(n => n.id !== node.id)
+                    .map(n =>
+                        `<option value="${n.id}">${escapeHtml(nodeOptionLabel(n))}</option>`
+                    )
+                    .join("");
+
+            const known = allSymbols();
+
+            const rows = known.map(symbol => {
+
+                const exists = outgoing.some(e => e.label === symbol);
+
+                return `
+                    <div class="transition-row ${exists ? "" : "missing"}">
+                        <span class="transition-symbol">${escapeHtml(symbol)}</span>
+                        <select
+                            data-symbol="${escapeHtml(symbol)}"
+                            aria-label="Transição para ${escapeHtml(symbol)}">
+                            ${targetOptions}
+                        </select>
+                    </div>
+                `;
+
+            }).join("");
+
+            const stray = outgoing.filter(
+                e => !e.label || !known.includes(e.label)
+            ).length;
+
+            html += `
+                <div class="property">
+                    <label>Transição para cada símbolo</label>
+                    ${rows}
+                    <small>
+                        Todos os símbolos do alfabeto, o auxiliar
+                        (${escapeHtml(machine.auxSymbol)}) e a palavra vazia
+                        (${escapeHtml(machine.emptySymbol)}) precisam de destino.
+                    </small>
+                    ${stray > 0 ? `
+                    <small style="display:block;margin-top:6px;">
+                        Há ${stray} conexão(ões) deste teste sem símbolo ou
+                        com símbolo fora do alfabeto. Selecione-a e corrija.
+                    </small>` : ""}
+                </div>
+            `;
+
+        }
+
+    }
 
     html += `
-
         <button
             id="deleteNodeButton"
             style="width:100%;">
-
             Excluir estado
-
         </button>
-
     `;
 
+    properties.innerHTML = html;
 
-    properties.innerHTML =
-        html;
+    if (node.type === "atribuicao") {
 
+        const select = document.getElementById("nodeSymbol");
 
-    if (
-        node.type ===
-        "atribuicao"
-    ) {
+        select.value = node.symbol;
 
-        const select =
-            document.getElementById(
-                "nodeSymbol"
-            );
+        let oldValue = node.symbol;
 
+        select.addEventListener("change", () => {
 
-        select.value =
-            node.symbol;
-
-
-        let oldValue =
-            node.symbol;
-
-
-        select.addEventListener(
-            "change",
-            () => {
-
-                if (
-                    oldValue !==
-                    select.value
-                ) {
-
-                    saveHistory();
-
-                }
-
-
-                node.symbol =
-                    select.value;
-
-
-                oldValue =
-                    node.symbol;
-
-
-                render();
-
+            if (oldValue !== select.value) {
+                saveHistory();
             }
-        );
+
+            node.symbol = select.value;
+
+            oldValue = node.symbol;
+
+            render();
+
+        });
 
     }
 
+    if (node.type === "teste" && machine.alphabetConfirmed) {
 
-    const deleteButton =
-        document.getElementById(
-            "deleteNodeButton"
-        );
+        properties.querySelectorAll("select[data-symbol]").forEach(select => {
 
+            const symbol = select.dataset.symbol;
+
+            const edge = machine.edges.find(
+                e => e.from === node.id && e.label === symbol
+            );
+
+            select.value = edge ? String(edge.to) : "";
+
+            select.addEventListener("change", () => {
+                setTestTransition(node, symbol, select.value);
+            });
+
+        });
+
+    }
+
+    const deleteButton = document.getElementById("deleteNodeButton");
 
     if (deleteButton) {
-
-        deleteButton.addEventListener(
-            "click",
-            () => {
-
-                deleteSelectedNode();
-
-            }
-        );
-
+        deleteButton.addEventListener("click", () => {
+            deleteSelectedNode();
+        });
     }
 
 }
@@ -2901,13 +2820,7 @@ function showEdgeProperties() {
         html += `
             <div class="property">
                 <label>Símbolo da saída</label>
-                <select id="edgeLabel">
-                    <option value="">Selecione...</option>
-                    <option value="0">0</option>
-                    <option value="1">1</option>
-                    <option value="#">#</option>
-                    <option value="ε">ε</option>
-                </select>
+                <select id="edgeLabel">${symbolOptionsHtml(allSymbols(), edge.label, "Selecione...")}</select>
             </div>
         `;
 
@@ -3236,38 +3149,40 @@ document.addEventListener("keydown", event => {
 
 function setInputWord() {
 
-    const input =
-        document.getElementById(
-            "inputWord"
-        );
-
+    const input = document.getElementById("inputWord");
 
     if (!input) {
-
         return;
-
     }
 
+    let word = input.value.trim();
 
-    machine.inputWord =
-        input.value.trim();
+    /* digitar o símbolo da palavra vazia equivale a fila vazia */
+    if (word === machine.emptySymbol) {
+        word = "";
+    }
 
+    machine.inputWord = word;
 
-    machine.queue =
-        [
-            ...machine.inputWord
-        ];
+    machine.queue = [...word];
 
-
-    machine.currentNode =
-        null;
-
+    machine.currentNode = null;
 
     updateQueue();
 
+    render();
 
-    executionStatus.textContent =
-        "Entrada definida.";
+    const invalid = machine.alphabetConfirmed
+        ? [...new Set([...word].filter(c => !machine.alphabet.includes(c)))]
+        : [];
+
+    if (invalid.length > 0) {
+        executionStatus.textContent =
+            "Entrada definida, mas contém símbolos fora do alfabeto: " +
+            invalid.join(" ") + ".";
+    } else {
+        executionStatus.textContent = "Entrada definida.";
+    }
 
 }
 
@@ -3284,7 +3199,7 @@ function updateQueue() {
     ) {
 
         queueElement.textContent =
-            "ε";
+            machine.emptySymbol;
 
 
         return;
@@ -3304,202 +3219,9 @@ function updateQueue() {
 
 function validateMachine() {
 
-    const errors = [];
+    const { errors, warnings } = collectProblems();
 
-    const warnings = [];
-
-
-    const starts =
-        machine.nodes.filter(
-            n =>
-                n.type ===
-                "partida"
-        );
-
-
-    if (
-        starts.length ===
-        0
-    ) {
-
-        errors.push(
-            "A máquina precisa possuir uma instrução de partida."
-        );
-
-    }
-
-
-    if (
-        starts.length >
-        1
-    ) {
-
-        errors.push(
-            "A máquina deve possuir somente uma instrução de partida."
-        );
-
-    }
-
-
-    /*
-       Só o teste pode ter várias saídas (uma por símbolo).
-       Qualquer outra instrução com mais de uma saída
-       é ambígua.
-    */
-
-    machine.nodes.forEach(node => {
-
-        if (
-            node.type === "teste" ||
-            node.type === "aceita" ||
-            node.type === "rejeita"
-        ) {
-            return;
-        }
-
-        const outgoing = machine.edges.filter(
-            edge => edge.from === node.id
-        );
-
-        if (outgoing.length > 1) {
-
-            errors.push(
-                `${getNodeLabel(node)} (#${node.id}) possui ` +
-                `${outgoing.length} saídas. Só o teste pode ter várias.`
-            );
-
-        }
-
-    });
-
-
-    const tests =
-        machine.nodes.filter(
-            n =>
-                n.type ===
-                "teste"
-        );
-
-
-    tests.forEach(
-        test => {
-
-            const outgoing =
-                machine.edges.filter(
-                    edge =>
-                        edge.from ===
-                        test.id
-                );
-
-
-            if (
-                outgoing.length ===
-                0
-            ) {
-
-                warnings.push(
-                    "Um teste não possui nenhuma saída."
-                );
-
-            }
-
-
-            const labels =
-                outgoing
-                    .map(
-                        edge =>
-                            edge.label
-                    )
-                    .filter(
-                        label =>
-                            label !== ""
-                    );
-
-
-            const unique =
-                new Set(
-                    labels
-                );
-
-
-            if (
-                unique.size !==
-                labels.length
-            ) {
-
-                errors.push(
-                    "Um teste possui duas saídas com o mesmo símbolo."
-                );
-
-            }
-
-        }
-    );
-
-
-    if (
-        errors.length ===
-        0
-    ) {
-
-        validationResult.innerHTML =
-            `
-            <div class="success">
-                Estrutura básica válida.
-            </div>
-            `;
-
-    } else {
-
-        validationResult.innerHTML =
-            `
-            <div class="error">
-
-                ${
-                    errors
-                        .map(
-                            error =>
-                                "" +
-                                error
-                        )
-                        .join(
-                            "<br>"
-                        )
-                }
-
-            </div>
-            `;
-
-    }
-
-
-    if (
-        warnings.length >
-        0
-    ) {
-
-        validationResult.innerHTML +=
-            `
-            <div
-                class="warning"
-                style="margin-top:8px;">
-
-                ${
-                    warnings
-                        .map(
-                            warning =>
-                                "" +
-                                warning
-                        )
-                        .join(
-                            "<br>"
-                        )
-                }
-
-            </div>
-            `;
-
-    }
+    renderValidation(errors, warnings);
 
 }
 
@@ -3579,6 +3301,11 @@ function stepMachine() {
         machine.currentNode ===
         null
     ) {
+
+        if (blockedByProblems()) {
+            return false;
+        }
+
 
         const start =
             machine.nodes.find(
@@ -3706,9 +3433,7 @@ function stepMachine() {
         "marcador"
     ) {
 
-        machine.queue.push(
-            "#"
-        );
+        machine.queue.push(machine.auxSymbol);
 
 
         updateQueue();
@@ -3748,8 +3473,7 @@ function stepMachine() {
         "teste"
     ) {
 
-        let symbol =
-            "ε";
+        let symbol = machine.emptySymbol;
 
 
         if (
@@ -3915,8 +3639,11 @@ function executeMachine() {
         return;
     }
 
-    machine.running = true;
+    if (blockedByProblems()) {
+        return;
+    }
 
+    machine.running = true;
     machine.steps = 0;
 
     executionStatus.textContent = "Executando...";
@@ -4043,6 +3770,9 @@ function newMachine() {
     machine.queue = [];
 
 
+    resetAlphabetConfig();
+
+
     removeConnectionPreview();
 
 
@@ -4129,6 +3859,9 @@ function loadExample() {
     machine.connectionMode = false;
 
     machine.connectionStart = null;
+
+
+    setAlphabetConfig(["0", "1"], DEFAULT_AUX, DEFAULT_EMPTY, true);
 
 
     removeConnectionPreview();
@@ -4505,7 +4238,549 @@ function loadExample() {
 
 
 /* =========================================================
+   ALFABETO: LEITURA, CONFIRMAÇÃO E SINCRONIA COM A TELA
+   ========================================================= */
+
+function escapeHtml(text) {
+
+    return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+
+}
+
+
+function quoteList(list) {
+
+    return list.map(s => `"${s}"`).join(", ");
+
+}
+
+
+/* símbolos que um teste precisa tratar */
+function allSymbols() {
+
+    return [
+        ...machine.alphabet,
+        machine.auxSymbol,
+        machine.emptySymbol
+    ];
+
+}
+
+
+/* símbolos que uma atribuição pode acrescentar à fila */
+function assignableSymbols() {
+
+    return [
+        ...machine.alphabet,
+        machine.auxSymbol
+    ];
+
+}
+
+
+function symbolOptionsHtml(symbols, current, placeholder) {
+
+    let html = placeholder
+        ? `<option value="">${placeholder}</option>`
+        : "";
+
+    symbols.forEach(symbol => {
+        html += `<option value="${escapeHtml(symbol)}">${escapeHtml(symbol)}</option>`;
+    });
+
+    if (current && !symbols.includes(current)) {
+        html +=
+            `<option value="${escapeHtml(current)}">` +
+            `${escapeHtml(current)} (fora do alfabeto)</option>`;
+    }
+
+    return html;
+
+}
+
+
+function setAlphabetConfig(alphabet, aux, empty, confirmed) {
+
+    machine.alphabet = [...alphabet];
+    machine.auxSymbol = aux;
+    machine.emptySymbol = empty;
+    machine.alphabetConfirmed = confirmed;
+
+    syncAlphabetInputs();
+
+}
+
+
+function resetAlphabetConfig() {
+
+    setAlphabetConfig([], DEFAULT_AUX, DEFAULT_EMPTY, false);
+
+}
+
+
+function showAlphabetStatus(text, isError) {
+
+    const status = document.getElementById("alphabetStatus");
+
+    if (!status) {
+        return;
+    }
+
+    status.textContent = text;
+    status.classList.toggle("error", Boolean(isError));
+
+}
+
+
+/* escreve a configuração atual nos campos do painel */
+function syncAlphabetInputs() {
+
+    const alphabetInput = document.getElementById("alphabetInput");
+    const auxInput = document.getElementById("auxInput");
+    const emptyInput = document.getElementById("emptyInput");
+    const wordInput = document.getElementById("inputWord");
+
+    if (!alphabetInput || !auxInput || !emptyInput) {
+        return;
+    }
+
+    alphabetInput.value = machine.alphabet.join(", ");
+    auxInput.value = machine.auxSymbol;
+    emptyInput.value = machine.emptySymbol;
+
+    if (machine.alphabetConfirmed) {
+
+        showAlphabetStatus(
+            `Confirmado: Σ = {${machine.alphabet.join(", ")}}, ` +
+            `auxiliar ${machine.auxSymbol}, vazia ${machine.emptySymbol}.`,
+            false
+        );
+
+    } else {
+
+        showAlphabetStatus(
+            "Informe os símbolos e clique em Confirmar. " +
+            "A máquina não executa sem o alfabeto.",
+            false
+        );
+
+    }
+
+    if (wordInput) {
+
+        wordInput.placeholder = machine.alphabet.length > 0
+            ? "Ex.: " + machine.alphabet.slice(0, 2).join("").repeat(2)
+            : "Defina o alfabeto antes";
+
+    }
+
+}
+
+
+/* lê e valida os três campos; devolve {error} ou os valores */
+function readAlphabetInputs() {
+
+    const alphabetText = document.getElementById("alphabetInput").value;
+    const auxText = document.getElementById("auxInput").value.trim();
+    const emptyText = document.getElementById("emptyInput").value.trim();
+
+    const aux = auxText || DEFAULT_AUX;
+    const empty = emptyText || DEFAULT_EMPTY;
+
+    if ([...aux].length !== 1) {
+        return { error: "O símbolo auxiliar deve ter exatamente um caractere." };
+    }
+
+    if ([...empty].length !== 1) {
+        return { error: "O símbolo da palavra vazia deve ter exatamente um caractere." };
+    }
+
+    if (aux === empty) {
+        return { error: "O símbolo auxiliar e o da palavra vazia devem ser diferentes." };
+    }
+
+    /* aceita "a, b", "{a, b}", "a b" ou "ab" */
+    let tokens = alphabetText
+        .replace(/[{}]/g, " ")
+        .split(/[\s,;]+/)
+        .filter(Boolean);
+
+    if (tokens.length === 1 && [...tokens[0]].length > 1) {
+        tokens = [...tokens[0]];
+    }
+
+    if (tokens.length === 0) {
+        return { error: "Informe ao menos um símbolo do alfabeto. Ex.: a, b" };
+    }
+
+    const tooLong = tokens.filter(t => [...t].length !== 1);
+
+    if (tooLong.length > 0) {
+        return {
+            error:
+                "Cada símbolo deve ter um único caractere. Corrija: " +
+                quoteList(tooLong) + "."
+        };
+    }
+
+    const repeated = tokens.filter((t, i) => tokens.indexOf(t) !== i);
+
+    if (repeated.length > 0) {
+        return {
+            error: "Símbolo repetido no alfabeto: " +
+                quoteList([...new Set(repeated)]) + "."
+        };
+    }
+
+    if (tokens.includes(aux)) {
+        return { error: `"${aux}" já é o símbolo auxiliar; não pode estar no alfabeto.` };
+    }
+
+    if (tokens.includes(empty)) {
+        return { error: `"${empty}" é o símbolo da palavra vazia; não pode estar no alfabeto.` };
+    }
+
+    return { alphabet: tokens, aux, empty };
+
+}
+
+
+function applyAlphabet() {
+
+    const result = readAlphabetInputs();
+
+    if (result.error) {
+        showAlphabetStatus(result.error, true);
+        return;
+    }
+
+    /* a execução recomeça com a nova configuração */
+    resetExecution();
+
+    saveHistory();
+
+    const oldAux = machine.auxSymbol;
+    const oldEmpty = machine.emptySymbol;
+
+    /* se o auxiliar/vazio mudou, acompanha nas conexões e atribuições */
+    machine.edges.forEach(edge => {
+
+        if (edge.label === oldAux) {
+            edge.label = result.aux;
+        } else if (edge.label === oldEmpty) {
+            edge.label = result.empty;
+        }
+
+    });
+
+    machine.nodes.forEach(node => {
+
+        if (node.type === "atribuicao" && node.symbol === oldAux) {
+            node.symbol = result.aux;
+        }
+
+    });
+
+    setAlphabetConfig(result.alphabet, result.aux, result.empty, true);
+
+    validationResult.innerHTML = "";
+
+    refreshProperties();
+
+    render();
+
+}
+
+
+/* ---------- transições do teste, uma por símbolo ---------- */
+
+function setTestTransition(test, symbol, targetValue) {
+
+    const edge = machine.edges.find(
+        e => e.from === test.id && e.label === symbol
+    );
+
+    saveHistory();
+
+    if (targetValue === "") {
+
+        if (edge) {
+            machine.edges = machine.edges.filter(e => e !== edge);
+        }
+
+    } else {
+
+        const to = Number(targetValue);
+
+        const parallel = machine.edges.filter(
+            o => o !== edge && o.from === test.id && o.to === to
+        ).length;
+
+        const bendOffsetY = [0, 30, -30, 45][parallel] ?? 0;
+
+        if (edge) {
+
+            edge.to = to;
+            edge.bendOffsetX = 0;
+            edge.bendOffsetY = bendOffsetY;
+
+        } else {
+
+            machine.edges.push({
+                id: machine.nextEdgeId++,
+                from: test.id,
+                to,
+                label: symbol,
+                bendOffsetX: 0,
+                bendOffsetY
+            });
+
+        }
+
+    }
+
+    render();
+
+    showNodeProperties();
+
+}
+
+
+/* ---------- problemas que impedem a execução ---------- */
+
+function collectProblems() {
+
+    const errors = [];
+    const warnings = [];
+
+    if (!machine.alphabetConfirmed) {
+        errors.push(
+            "Defina o alfabeto e clique em Confirmar no painel Alfabeto."
+        );
+    }
+
+    const starts = machine.nodes.filter(n => n.type === "partida");
+
+    if (starts.length === 0) {
+        errors.push("A máquina precisa possuir uma instrução de partida.");
+    }
+
+    if (starts.length > 1) {
+        errors.push("A máquina deve possuir somente uma instrução de partida.");
+    }
+
+    /* só o teste pode ter várias saídas (uma por símbolo) */
+    machine.nodes.forEach(node => {
+
+        if (
+            node.type === "teste" ||
+            node.type === "aceita" ||
+            node.type === "rejeita"
+        ) {
+            return;
+        }
+
+        const outgoing = machine.edges.filter(e => e.from === node.id);
+
+        if (outgoing.length > 1) {
+            errors.push(
+                `${getNodeLabel(node)} (#${node.id}) possui ` +
+                `${outgoing.length} saídas. Só o teste pode ter várias.`
+            );
+        }
+
+    });
+
+    if (machine.alphabetConfirmed) {
+
+        const known = allSymbols();
+
+        machine.nodes
+            .filter(n => n.type === "teste")
+            .forEach(test => {
+
+                const name = `Teste #${test.id}`;
+
+                const outgoing = machine.edges.filter(e => e.from === test.id);
+
+                const unlabeled = outgoing.filter(e => !e.label).length;
+
+                if (unlabeled > 0) {
+                    errors.push(
+                        `${name}: ${unlabeled} conexão(ões) de saída sem símbolo.`
+                    );
+                }
+
+                const unknown = [...new Set(
+                    outgoing
+                        .map(e => e.label)
+                        .filter(l => l && !known.includes(l))
+                )];
+
+                if (unknown.length > 0) {
+                    errors.push(
+                        `${name}: símbolo(s) fora do alfabeto: ${quoteList(unknown)}.`
+                    );
+                }
+
+                const seen = new Set();
+                const duplicated = new Set();
+
+                outgoing.forEach(e => {
+
+                    if (!e.label) {
+                        return;
+                    }
+
+                    if (seen.has(e.label)) {
+                        duplicated.add(e.label);
+                    }
+
+                    seen.add(e.label);
+
+                });
+
+                if (duplicated.size > 0) {
+                    errors.push(
+                        `${name}: mais de uma saída para ${quoteList([...duplicated])}.`
+                    );
+                }
+
+                const missing = known.filter(s => !seen.has(s));
+
+                if (missing.length > 0) {
+                    errors.push(
+                        `${name}: falta a transição para ${quoteList(missing)}.`
+                    );
+                }
+
+            });
+
+        const assignable = assignableSymbols();
+
+        machine.nodes
+            .filter(n => n.type === "atribuicao")
+            .forEach(node => {
+
+                if (!assignable.includes(node.symbol)) {
+                    errors.push(
+                        `Atribuição #${node.id}: o símbolo "${node.symbol}" ` +
+                        `não pertence ao alfabeto.`
+                    );
+                }
+
+            });
+
+        const invalidInput = [...new Set(
+            [...machine.inputWord].filter(c => !machine.alphabet.includes(c))
+        )];
+
+        if (invalidInput.length > 0) {
+            errors.push(
+                "A palavra de entrada contém símbolos fora do alfabeto: " +
+                quoteList(invalidInput) + "."
+            );
+        }
+
+    }
+
+    if (!machine.nodes.some(n => n.type === "aceita")) {
+        warnings.push("A máquina não possui nenhum estado Aceita.");
+    }
+
+    return { errors, warnings };
+
+}
+
+
+function renderValidation(errors, warnings) {
+
+    let html = "";
+
+    if (errors.length === 0) {
+
+        html += `<div class="success">Máquina válida. Pode ser executada.</div>`;
+
+    } else {
+
+        html += `<div class="error">${errors.map(e => escapeHtml(e)).join("<br>")}</div>`;
+
+    }
+
+    if (warnings.length > 0) {
+
+        html +=
+            `<div class="warning" style="margin-top:8px;">` +
+            warnings.map(w => escapeHtml(w)).join("<br>") +
+            `</div>`;
+
+    }
+
+    validationResult.innerHTML = html;
+
+}
+
+
+/* impede a execução enquanto houver erros */
+function blockedByProblems() {
+
+    const { errors, warnings } = collectProblems();
+
+    if (errors.length === 0) {
+        return false;
+    }
+
+    executionStatus.textContent =
+        "Execução bloqueada: corrija os problemas listados em Validação.";
+
+    renderValidation(errors, warnings);
+
+    return true;
+
+}
+
+
+/* =========================================================
    INICIALIZAÇÃO
    ========================================================= */
 
 render();
+
+syncAlphabetInputs();
+
+(function () {
+
+    ["alphabetInput", "auxInput", "emptyInput"].forEach(id => {
+
+        const field = document.getElementById(id);
+
+        if (!field) {
+            return;
+        }
+
+        field.addEventListener("input", () => {
+
+            if (machine.alphabetConfirmed) {
+                showAlphabetStatus(
+                    "Alterações não confirmadas. Clique em Confirmar.",
+                    false
+                );
+            }
+
+        });
+
+        field.addEventListener("keydown", event => {
+
+            if (event.key === "Enter") {
+                applyAlphabet();
+            }
+
+        });
+
+    });
+
+})();
