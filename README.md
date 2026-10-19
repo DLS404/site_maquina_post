@@ -126,7 +126,3 @@ Algumas decisões que valem saber:
 - Exportar e importar a máquina em JSON.
 - Mais exemplos prontos (por exemplo, reconhecer `aⁿbⁿ`).
 - Mostrar o histórico de configurações da execução em uma lista.
-
----
-
-Se você chegou até aqui e testou o simulador, obrigada por passar por aqui. Se achou um bug ou teve uma ideia, abre uma issue ou me conta. Vai ser bem-vinda.
