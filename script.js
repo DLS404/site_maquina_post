@@ -408,6 +408,200 @@ function getConnectionPoint(
 let reconnectPreview = null;
 
 
+/*
+   Sai de um ponto (ox, oy) dentro do estado, em direção a (tx, ty),
+   e devolve onde a linha cruza a borda do retângulo.
+*/
+function rayExitRect(node, ox, oy, tx, ty) {
+
+    const size = getNodeSize(node);
+
+    const left = node.x;
+    const right = node.x + size.width;
+    const top = node.y;
+    const bottom = node.y + size.height;
+
+    ox = Math.min(Math.max(ox, left), right);
+    oy = Math.min(Math.max(oy, top), bottom);
+
+    const dx = tx - ox;
+    const dy = ty - oy;
+
+    if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {
+        return { x: ox, y: oy };
+    }
+
+    const tX = dx > 0 ? (right - ox) / dx
+        : dx < 0 ? (left - ox) / dx
+        : Infinity;
+
+    const tY = dy > 0 ? (bottom - oy) / dy
+        : dy < 0 ? (top - oy) / dy
+        : Infinity;
+
+    const t = Math.min(tX, tY);
+
+    return { x: ox + dx * t, y: oy + dy * t };
+}
+
+
+/*
+   Setas entre o mesmo par de estados (nos dois sentidos) ganham
+   "pistas" paralelas, para nunca ficarem uma sobre a outra.
+   Devolve o deslocamento perpendicular desta seta e o vetor
+   perpendicular (igual para todas as setas do par).
+*/
+const LANE_SPACING = 24;
+
+function getLaneInfo(edge, source, target) {
+
+    const group = machine.edges
+        .filter(e =>
+            (e.from === edge.from && e.to === edge.to) ||
+            (e.from === edge.to && e.to === edge.from))
+        .sort((a, b) => a.id - b.id);
+
+    const n = group.length;
+
+    if (n <= 1) {
+        return { shift: 0, px: 0, py: 0 };
+    }
+
+    /* direção canônica: do estado de menor id para o de maior id */
+    const a = source.id < target.id ? source : target;
+    const b = source.id < target.id ? target : source;
+
+    const ca = nodeCenter(a);
+    const cb = nodeCenter(b);
+
+    let dx = cb.x - ca.x;
+    let dy = cb.y - ca.y;
+
+    const length = Math.hypot(dx, dy) || 1;
+
+    dx /= length;
+    dy /= length;
+
+    const sa = getNodeSize(a);
+    const sb = getNodeSize(b);
+
+    const maxShift = Math.max(
+        Math.min(sa.width, sa.height, sb.width, sb.height) / 2 - 8,
+        4
+    );
+
+    const spacing = Math.min(LANE_SPACING, (2 * maxShift) / (n - 1));
+
+    const index = group.findIndex(e => e.id === edge.id);
+
+    return {
+        shift: (index - (n - 1) / 2) * spacing,
+        px: -dy,
+        py: dx
+    };
+
+}
+
+
+function edgeIsManual(edge) {
+
+    return edge.manual === true ||
+        Boolean(edge.bendOffsetX) ||
+        Boolean(edge.bendOffsetY);
+
+}
+
+
+/* a curva (quadrática) atravessa algum outro estado? */
+function curveHitsNodes(start, control, end, obstacles) {
+
+    for (let i = 1; i < 24; i++) {
+
+        const t = i / 24;
+        const u = 1 - t;
+
+        const x = u * u * start.x + 2 * t * u * control.x + t * t * end.x;
+        const y = u * u * start.y + 2 * t * u * control.y + t * t * end.y;
+
+        for (const rect of obstacles) {
+            if (
+                x > rect.left && x < rect.right &&
+                y > rect.top && y < rect.bottom
+            ) {
+                return true;
+            }
+        }
+
+    }
+
+    return false;
+
+}
+
+
+/* curva automática para contornar estados que estariam no caminho */
+function autoAvoidOffset(start, end, mid, source, target) {
+
+    const obstacles = machine.nodes
+        .filter(n => n !== source && n !== target)
+        .map(n => {
+            const size = getNodeSize(n);
+            return {
+                left: n.x - 10,
+                right: n.x + size.width + 10,
+                top: n.y - 10,
+                bottom: n.y + size.height + 10
+            };
+        });
+
+    if (obstacles.length === 0) {
+        return { x: 0, y: 0 };
+    }
+
+    if (!curveHitsNodes(start, mid, end, obstacles)) {
+        return { x: 0, y: 0 };
+    }
+
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = Math.hypot(dx, dy) || 1;
+
+    const nx = -dy / length;
+    const ny = dx / length;
+
+    const maxX = canvas.clientWidth;
+    const maxY = canvas.clientHeight;
+
+    for (const bulge of [40, 70, 100, 140, 180, 230]) {
+
+        for (const sign of [1, -1]) {
+
+            /* o ponto de controle precisa ir 2x mais longe que a curva */
+            const control = {
+                x: mid.x + nx * bulge * 2 * sign,
+                y: mid.y + ny * bulge * 2 * sign
+            };
+
+            const peakX = mid.x + nx * bulge * sign;
+            const peakY = mid.y + ny * bulge * sign;
+
+            if (peakX < 0 || peakY < 0 || peakX > maxX || peakY > maxY) {
+                continue;
+            }
+
+            if (!curveHitsNodes(start, control, end, obstacles)) {
+                return { x: control.x - mid.x, y: control.y - mid.y };
+            }
+
+        }
+
+    }
+
+    return { x: 0, y: 0 };
+
+}
+
+
 function getEdgeGeometry(edge) {
 
     const source =
@@ -466,16 +660,22 @@ function getEdgeGeometry(edge) {
 
     } else {
 
-        start = getConnectionPoint(
+        /* pista paralela: desloca a linha inteira de lado */
+        const lane = getLaneInfo(edge, source, target);
+
+        const ox = lane.px * lane.shift;
+        const oy = lane.py * lane.shift;
+
+        start = rayExitRect(
             source,
-            targetCenter.x,
-            targetCenter.y
+            sourceCenter.x + ox, sourceCenter.y + oy,
+            targetCenter.x + ox, targetCenter.y + oy
         );
 
-        end = getConnectionPoint(
+        end = rayExitRect(
             target,
-            sourceCenter.x,
-            sourceCenter.y
+            targetCenter.x + ox, targetCenter.y + oy,
+            sourceCenter.x + ox, sourceCenter.y + oy
         );
 
     }
@@ -491,9 +691,28 @@ function getEdgeGeometry(edge) {
         edge.bendOffsetY = 0;
     }
 
+    let bendX = edge.bendOffsetX;
+    let bendY = edge.bendOffsetY;
+
+    /* sem curva manual: desvia sozinha de estados no caminho */
+    if (!preview && !edgeIsManual(edge)) {
+
+        const auto = autoAvoidOffset(
+            start,
+            end,
+            { x: middleX, y: middleY },
+            source,
+            target
+        );
+
+        bendX = auto.x;
+        bendY = auto.y;
+
+    }
+
     const control = {
-        x: middleX + edge.bendOffsetX,
-        y: middleY + edge.bendOffsetY
+        x: middleX + bendX,
+        y: middleY + bendY
     };
 
     return {
@@ -523,8 +742,8 @@ function addNode(
            e escalonado, para não empilhar tudo no mesmo lugar */
         const offset = (machine.nodes.length % 6) * 24;
 
-        x = canvasScroll.scrollLeft + 40 + offset;
-        y = canvasScroll.scrollTop + 40 + offset;
+        x = (canvasScroll.scrollLeft + 40) / viewScale + offset;
+        y = (canvasScroll.scrollTop + 40) / viewScale + offset;
 
     }
 
@@ -668,6 +887,96 @@ function getNodeLabel(node) {
 
 
 /* =========================================================
+   ZOOM "AJUSTAR À TELA"
+   Reduz a área de construção inteira (CSS scale) para a máquina
+   caber na largura visível, útil em celulares pequenos.
+   ========================================================= */
+
+let viewScale = 1;
+let fitMode = false;
+let viewMinWidth = 0;
+let viewMinHeight = 0;
+
+function applyView() {
+
+    canvas.style.transform = "";
+    canvas.style.width = "";
+    canvas.style.marginBottom = "";
+    canvas.style.minWidth = viewMinWidth ? viewMinWidth + "px" : "";
+    canvas.style.minHeight = viewMinHeight ? viewMinHeight + "px" : "";
+    canvasScroll.style.overflowX = "";
+
+    viewScale = 1;
+
+    updateFitButton();
+
+    if (!fitMode || machine.nodes.length === 0) {
+        return;
+    }
+
+    let right = 0;
+
+    machine.nodes.forEach(node => {
+        right = Math.max(right, node.x + getNodeSize(node).width);
+    });
+
+    const visible = canvasScroll.clientWidth;
+
+    if (!visible) {
+        return;
+    }
+
+    const scale = Math.max(0.2, Math.min(1, visible / (right + 20)));
+
+    if (scale >= 0.999) {
+        return;
+    }
+
+    viewScale = scale;
+
+    canvas.style.transformOrigin = "0 0";
+    canvas.style.transform = `scale(${scale})`;
+    canvas.style.minWidth = "0";
+    canvas.style.width = (visible / scale) + "px";
+    canvas.style.marginBottom =
+        -(canvas.offsetHeight * (1 - scale)) + "px";
+
+    /* a área inteira já cabe na largura: sem rolagem lateral */
+    canvasScroll.style.overflowX = "hidden";
+
+}
+
+function updateFitButton() {
+
+    const button = document.getElementById("fitButton");
+
+    if (button) {
+        button.textContent = fitMode ? "Tamanho real" : "Ajustar à tela";
+        button.classList.toggle("toggle-on", fitMode);
+    }
+
+}
+
+function toggleFit() {
+
+    fitMode = !fitMode;
+
+    applyView();
+
+    canvasScroll.scrollLeft = 0;
+
+}
+
+window.addEventListener("resize", () => {
+
+    if (fitMode) {
+        applyView();
+    }
+
+});
+
+
+/* =========================================================
    ENCONTRAR ESTADO SOB O MOUSE
    ========================================================= */
 
@@ -678,13 +987,13 @@ function getNodeUnderMouse(event) {
 
 
     const x =
-        event.clientX -
-        rect.left;
+        (event.clientX -
+        rect.left) / viewScale;
 
 
     const y =
-        event.clientY -
-        rect.top;
+        (event.clientY -
+        rect.top) / viewScale;
 
 
     for (
@@ -847,13 +1156,13 @@ function updateConnectionPreview(
 
 
     const mouseX =
-        event.clientX -
-        rect.left;
+        (event.clientX -
+        rect.left) / viewScale;
 
 
     const mouseY =
-        event.clientY -
-        rect.top;
+        (event.clientY -
+        rect.top) / viewScale;
 
 
     const sourceCenter =
@@ -1234,56 +1543,6 @@ function createEdge(
     saveHistory();
 
 
-    const parallelEdges =
-        machine.edges.filter(
-            edge =>
-
-                edge.from ===
-                    from &&
-
-                edge.to ===
-                    to
-        );
-
-
-    const index =
-        parallelEdges.length;
-
-
-    let bendOffsetY =
-        0;
-
-
-    if (
-        index === 1
-    ) {
-
-        bendOffsetY =
-            30;
-
-    }
-
-
-    if (
-        index === 2
-    ) {
-
-        bendOffsetY =
-            -30;
-
-    }
-
-
-    if (
-        index === 3
-    ) {
-
-        bendOffsetY =
-            45;
-
-    }
-
-
     const edge = {
 
         id:
@@ -1299,7 +1558,8 @@ function createEdge(
         bendOffsetX:
             0,
 
-        bendOffsetY
+        bendOffsetY:
+            0
 
     };
 
@@ -1508,7 +1768,31 @@ function renderEdges() {
             ? [...selection.edges][0]
             : null;
 
-    machine.edges.forEach(edge => {
+    /* rótulos já posicionados (para um não cobrir o outro) */
+    const placedLabels = [];
+
+    const nodeRects = machine.nodes.map(n => {
+        const size = getNodeSize(n);
+        return {
+            left: n.x - 2,
+            right: n.x + size.width + 2,
+            top: n.y - 2,
+            bottom: n.y + size.height + 2
+        };
+    });
+
+    const overlaps = (a, b) =>
+        a.left < b.right && a.right > b.left &&
+        a.top < b.bottom && a.bottom > b.top;
+
+    /* setas selecionadas por último: ficam por cima e recebem o clique */
+    const ordered = [...machine.edges].sort(
+        (a, b) =>
+            Number(selection.edges.has(a.id)) -
+            Number(selection.edges.has(b.id))
+    );
+
+    ordered.forEach(edge => {
 
         const geometry = getEdgeGeometry(edge);
 
@@ -1566,11 +1850,51 @@ function renderEdges() {
 
         if (edge.label) {
 
-            const labelX =
-                0.20 * start.x + 0.60 * control.x + 0.20 * end.x;
+            /* procura, ao longo da curva, um ponto livre para o rótulo */
+            let labelX = 0;
+            let labelY = 0;
+            let found = false;
 
-            const labelY =
-                0.20 * start.y + 0.60 * control.y + 0.20 * end.y;
+            for (const t of [0.5, 0.4, 0.6, 0.33, 0.67, 0.27, 0.73, 0.2, 0.8]) {
+
+                const u = 1 - t;
+
+                const px = u * u * start.x + 2 * t * u * control.x + t * t * end.x;
+                const py = u * u * start.y + 2 * t * u * control.y + t * t * end.y;
+
+                const rect = {
+                    left: px - 14,
+                    right: px + 14,
+                    top: py - 15,
+                    bottom: py + 8
+                };
+
+                if (
+                    !nodeRects.some(r => overlaps(rect, r)) &&
+                    !placedLabels.some(r => overlaps(rect, r))
+                ) {
+                    labelX = px;
+                    labelY = py;
+                    found = true;
+                    placedLabels.push(rect);
+                    break;
+                }
+
+            }
+
+            if (!found) {
+
+                labelX = 0.25 * start.x + 0.5 * control.x + 0.25 * end.x;
+                labelY = 0.25 * start.y + 0.5 * control.y + 0.25 * end.y;
+
+                placedLabels.push({
+                    left: labelX - 14,
+                    right: labelX + 14,
+                    top: labelY - 15,
+                    bottom: labelY + 8
+                });
+
+            }
 
             const group = svgElement("g", {
                 "pointer-events": "none"
@@ -1661,8 +1985,8 @@ function canvasPoint(event) {
     const rect = canvas.getBoundingClientRect();
 
     return {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top
+        x: (event.clientX - rect.left) / viewScale,
+        y: (event.clientY - rect.top) / viewScale
     };
 
 }
@@ -1974,6 +2298,23 @@ function bendWeightAt(edge, point) {
 }
 
 
+/* curva atual (automática ou manual), relativa ao meio da seta */
+function currentBend(edge) {
+
+    const g = getEdgeGeometry(edge);
+
+    if (!g) {
+        return { x: 0, y: 0 };
+    }
+
+    return {
+        x: g.control.x - (g.start.x + g.end.x) / 2,
+        y: g.control.y - (g.start.y + g.end.y) / 2
+    };
+
+}
+
+
 function startEdgePress(event, hitElement, point) {
 
     const id = Number(hitElement.dataset.edgeHit);
@@ -2014,10 +2355,7 @@ function startEdgePress(event, hitElement, point) {
         moved: false,
         single,
         multi: !single,
-        startBend: {
-            x: edge.bendOffsetX || 0,
-            y: edge.bendOffsetY || 0
-        },
+        startBend: currentBend(edge),
         weight: single ? bendWeightAt(edge, point) : 1
     };
 
@@ -2054,6 +2392,7 @@ function bendEdgeByBody(point) {
         return;
     }
 
+    edge.manual = true;
     edge.bendOffsetX = drag.startBend.x + dx / drag.weight;
     edge.bendOffsetY = drag.startBend.y + dy / drag.weight;
 
@@ -2134,6 +2473,7 @@ function moveControlHandle(point) {
     const middleX = (g.start.x + g.end.x) / 2;
     const middleY = (g.start.y + g.end.y) / 2;
 
+    edge.manual = true;
     edge.bendOffsetX = point.x + drag.grabX - middleX;
     edge.bendOffsetY = point.y + drag.grabY - middleY;
 
@@ -2188,7 +2528,7 @@ function moveReconnectHandle(event, point) {
    Troca origem/destino de uma seta já existente.
    Mantém as mesmas regras de createEdge.
 */
-function tryReconnectEdge(edge, from, to) {
+function tryReconnectEdge(edge, from, to, keepLabel = false) {
 
     if (from === edge.from && to === edge.to) {
         return false;
@@ -2241,7 +2581,8 @@ function tryReconnectEdge(edge, from, to) {
     edge.to = to;
 
     edge.bendOffsetX = 0;
-    edge.bendOffsetY = [0, 30, -30, 45][index] ?? 0;
+    edge.bendOffsetY = 0;
+    edge.manual = false;
 
     /* O símbolo só existe em saídas de um teste e não pode repetir. */
     if (source.type !== "teste") {
@@ -2955,7 +3296,7 @@ function showEdgeProperties() {
         .getElementById("reverseEdgeButton")
         .addEventListener("click", () => {
 
-            if (tryReconnectEdge(edge, edge.to, edge.from)) {
+            if (tryReconnectEdge(edge, edge.to, edge.from, true)) {
 
                 render();
 
@@ -2979,7 +3320,8 @@ function showEdgeProperties() {
             ).length;
 
             edge.bendOffsetX = 0;
-            edge.bendOffsetY = [0, 30, -30, 45][index] ?? 0;
+            edge.bendOffsetY = 0;
+            edge.manual = false;
 
             renderEdges();
 
@@ -3827,407 +4169,289 @@ function newMachine() {
    EXEMPLO
    ========================================================= */
 
-function loadExample() {
+/* =========================================================
+   EXEMPLOS PRONTOS
+   Cada exemplo descreve estados em uma grade (coluna, linha)
+   e as conexões entre eles. As setas ficam no modo automático.
+   ========================================================= */
+
+const EXAMPLES = {
+
+    /* começa com 0 */
+    zero: {
+        alphabet: ["0", "1"],
+        input: "0",
+        nodes: {
+            s: ["partida", 0, 1],
+            m: ["marcador", 1, 1],
+            t: ["teste", 2, 1],
+            ok: ["aceita", 3, 0],
+            no: ["rejeita", 3, 2]
+        },
+        edges: [
+            ["s", "m"],
+            ["m", "t"],
+            ["t", "ok", "0"],
+            ["t", "ok", "ε"],
+            ["t", "no", "1"],
+            ["t", "no", "#"]
+        ]
+    },
+
+    /* contém pelo menos um 1: gira a fila até achar um 1 ou chegar ao # */
+    contem1: {
+        alphabet: ["0", "1"],
+        input: "0001",
+        nodes: {
+            s: ["partida", 0, 1],
+            m: ["marcador", 1, 1],
+            t: ["teste", 2, 1],
+            x0: ["atribuicao", 2, 0, "0"],
+            ok: ["aceita", 3, 0],
+            no: ["rejeita", 3, 2]
+        },
+        edges: [
+            ["s", "m"],
+            ["m", "t"],
+            ["t", "x0", "0"],
+            ["x0", "t"],
+            ["t", "ok", "1"],
+            ["t", "no", "#"],
+            ["t", "no", "ε"]
+        ]
+    },
+
+    /* aⁿbⁿ */
+    anbn: {
+        alphabet: ["a", "b"],
+        input: "aabb",
+        nodes: {
+            s: ["partida", 0, 1],
+            m: ["marcador", 1, 1],
+            t0: ["teste", 2, 1],
+            t1: ["teste", 3, 1],
+            t2: ["teste", 4, 1],
+            xa: ["atribuicao", 3, 0, "a"],
+            xb: ["atribuicao", 4, 0, "b"],
+            m2: ["marcador", 3, 3],
+            ok: ["aceita", 2, 0],
+            r0: ["rejeita", 2, 2],
+            r1: ["rejeita", 3, 2],
+            r2: ["rejeita", 4, 2]
+        },
+        edges: [
+            ["s", "m"],
+            ["m", "t0"],
+            /* lê o 1º símbolo: a segue; # = fila vazia = aceita */
+            ["t0", "t1", "a"],
+            ["t0", "ok", "#"],
+            ["t0", "r0", "b"],
+            ["t0", "r0", "ε"],
+            /* passa os a's para o fim, apaga o 1º b */
+            ["t1", "xa", "a"],
+            ["xa", "t1"],
+            ["t1", "t2", "b"],
+            ["t1", "r1", "#"],
+            ["t1", "r1", "ε"],
+            /* passa os b's para o fim e recoloca o # */
+            ["t2", "xb", "b"],
+            ["xb", "t2"],
+            ["t2", "m2", "#"],
+            ["m2", "t0"],
+            ["t2", "r2", "a"],
+            ["t2", "r2", "ε"]
+        ]
+    },
+
+    /* aⁿbⁿcⁿ (não é livre de contexto) */
+    anbncn: {
+        alphabet: ["a", "b", "c"],
+        input: "aabbcc",
+        nodes: {
+            s: ["partida", 0, 0],
+            m: ["marcador", 0, 1],
+            t0: ["teste", 1, 1],
+            ok: ["aceita", 1, 0],
+            t1: ["teste", 2, 1],
+            xa: ["atribuicao", 2, 0, "a"],
+            t2: ["teste", 3, 1],
+            xb: ["atribuicao", 3, 0, "b"],
+            t3: ["teste", 3, 3],
+            xc: ["atribuicao", 4, 3, "c"],
+            m2: ["marcador", 1, 3],
+            r0: ["rejeita", 0, 2],
+            r1: ["rejeita", 2, 2],
+            r2: ["rejeita", 4, 1],
+            r3: ["rejeita", 3, 4]
+        },
+        edges: [
+            ["s", "m"],
+            ["m", "t0"],
+            ["t0", "t1", "a"],
+            ["t0", "ok", "#"],
+            ["t0", "r0", "b"],
+            ["t0", "r0", "c"],
+            ["t0", "r0", "ε"],
+            ["t1", "xa", "a"],
+            ["xa", "t1"],
+            ["t1", "t2", "b"],
+            ["t1", "r1", "c"],
+            ["t1", "r1", "#"],
+            ["t1", "r1", "ε"],
+            ["t2", "xb", "b"],
+            ["xb", "t2"],
+            ["t2", "t3", "c"],
+            ["t2", "r2", "a"],
+            ["t2", "r2", "#"],
+            ["t2", "r2", "ε"],
+            ["t3", "xc", "c"],
+            ["xc", "t3"],
+            ["t3", "m2", "#"],
+            ["m2", "t0"],
+            ["t3", "r3", "a"],
+            ["t3", "r3", "b"],
+            ["t3", "r3", "ε"]
+        ]
+    }
+
+};
+
+
+function loadExample(key) {
+
+    const spec = EXAMPLES[key || "zero"];
+
+    if (!spec) {
+        return;
+    }
 
     if (
         machine.nodes.length > 0 ||
         machine.edges.length > 0
     ) {
-
         saveHistory();
-
     }
-
 
     pauseMachine();
 
-
     machine.nodes = [];
-
     machine.edges = [];
-
     machine.nextNodeId = 1;
-
     machine.nextEdgeId = 1;
-
     machine.selectedNode = null;
-
     machine.selectedEdge = null;
-
     machine.currentNode = null;
-
     machine.connectionMode = false;
-
     machine.connectionStart = null;
 
+    clearSelection();
 
-    setAlphabetConfig(["0", "1"], DEFAULT_AUX, DEFAULT_EMPTY, true);
-
+    setAlphabetConfig(spec.alphabet, DEFAULT_AUX, DEFAULT_EMPTY, true);
 
     removeConnectionPreview();
 
+    /* grade -> pixels, centralizada na área de construção */
+    const keys = Object.keys(spec.nodes);
 
-    /*
-     ========================================================
-     TAMANHO DA ÁREA
-     ========================================================
-    */
+    const cols = keys.map(k => spec.nodes[k][1]);
+    const rows = keys.map(k => spec.nodes[k][2]);
 
-    const canvasWidth =
-        canvas.clientWidth || 1200;
+    const minCol = Math.min(...cols);
+    const maxCol = Math.max(...cols);
+    const minRow = Math.min(...rows);
+    const maxRow = Math.max(...rows);
 
+    const spanCols = maxCol - minCol;
+    const spanRows = maxRow - minRow;
 
-    const canvasHeight =
-        canvas.clientHeight || 500;
+    /* espaçamento fixo (setas legíveis); a área cresce se for preciso
+       e, em telas pequenas, passa a rolar */
+    const colStep = 175;
+    const rowStep = 110;
 
+    const totalWidth = spanCols * colStep + NODE_WIDTH;
+    const totalHeight = spanRows * rowStep + NODE_HEIGHT;
 
-    /*
-     ========================================================
-     POSIÇÃO CENTRAL
-     ========================================================
-    */
+    /* mede a área em tamanho real (sem zoom nem tamanho forçado) */
+    viewMinWidth = 0;
+    viewMinHeight = 0;
 
-    const machineWidth =
-        650;
+    const wasFit = fitMode;
 
+    fitMode = false;
+    applyView();
 
-    const startX =
-        Math.max(
-            30,
-            (
-                canvasWidth -
-                machineWidth
-            ) / 2
-        );
+    let canvasWidth = canvas.clientWidth || 1200;
+    let canvasHeight = canvas.clientHeight || 560;
 
+    if (canvasWidth < totalWidth + 60) {
+        canvasWidth = totalWidth + 60;
+        viewMinWidth = canvasWidth;
+    }
 
-    const centerY =
-        Math.max(
-            100,
-            canvasHeight / 2
-        );
+    if (canvasHeight < totalHeight + 60) {
+        canvasHeight = totalHeight + 60;
+        viewMinHeight = canvasHeight;
+    }
 
+    /* se a máquina não cabe na tela visível, já abre ajustada */
+    fitMode = wasFit || canvasScroll.clientWidth < canvasWidth;
 
-    /*
-     ========================================================
-     PARTIDA
-     ========================================================
-    */
+    const originX = (canvasWidth - totalWidth) / 2;
+    const originY = (canvasHeight - totalHeight) / 2;
 
-    const start = {
+    const byKey = {};
 
-        id:
-            machine.nextNodeId++,
+    keys.forEach(k => {
 
-        type:
-            "partida",
+        const [type, col, row, symbol] = spec.nodes[k];
 
-        x:
-            startX,
+        const node = {
+            id: machine.nextNodeId++,
+            type,
+            x: 0,
+            y: 0
+        };
 
-        y:
-            centerY - 26
+        if (type === "atribuicao") {
+            node.symbol = symbol;
+        }
 
-    };
+        /* centro da célula da grade; o estado é centralizado nela */
+        const size = getNodeSize(node);
 
+        node.x = originX + (col - minCol) * colStep + (NODE_WIDTH - size.width) / 2;
+        node.y = originY + (row - minRow) * rowStep + (NODE_HEIGHT - size.height) / 2;
 
-    /*
-     ========================================================
-     X ← X#
-     ========================================================
-    */
+        byKey[k] = node;
 
-    const marker = {
-
-        id:
-            machine.nextNodeId++,
-
-        type:
-            "marcador",
-
-        x:
-            startX + 115,
-
-        y:
-            centerY - 30
-
-    };
-
-
-    /*
-     ========================================================
-     X ← ler(X)
-     ========================================================
-    */
-
-    const test = {
-
-        id:
-            machine.nextNodeId++,
-
-        type:
-            "teste",
-
-        x:
-            startX + 305,
-
-        y:
-            centerY - 30
-
-    };
-
-
-    /*
-     ========================================================
-     ACEITA
-     ========================================================
-    */
-
-    const accept = {
-
-        id:
-            machine.nextNodeId++,
-
-        type:
-            "aceita",
-
-        x:
-            startX + 550,
-
-        y:
-            centerY - 145
-
-    };
-
-
-    /*
-     ========================================================
-     REJEITA
-     ========================================================
-    */
-
-    const reject = {
-
-        id:
-            machine.nextNodeId++,
-
-        type:
-            "rejeita",
-
-        x:
-            startX + 550,
-
-        y:
-            centerY + 90
-
-    };
-
-
-    machine.nodes.push(
-        start,
-        marker,
-        test,
-        accept,
-        reject
-    );
-
-
-    /*
-     ========================================================
-     PARTIDA → X ← X#
-     ========================================================
-    */
-
-    machine.edges.push({
-
-        id:
-            machine.nextEdgeId++,
-
-        from:
-            start.id,
-
-        to:
-            marker.id,
-
-        label:
-            "",
-
-        bendOffsetX:
-            0,
-
-        bendOffsetY:
-            0
+        machine.nodes.push(node);
 
     });
 
+    spec.edges.forEach(([from, to, label]) => {
 
-    /*
-     ========================================================
-     X ← X# → X ← ler(X)
-     ========================================================
-    */
-
-    machine.edges.push({
-
-        id:
-            machine.nextEdgeId++,
-
-        from:
-            marker.id,
-
-        to:
-            test.id,
-
-        label:
-            "",
-
-        bendOffsetX:
-            0,
-
-        bendOffsetY:
-            0
+        machine.edges.push({
+            id: machine.nextEdgeId++,
+            from: byKey[from].id,
+            to: byKey[to].id,
+            label: label || "",
+            bendOffsetX: 0,
+            bendOffsetY: 0,
+            manual: false
+        });
 
     });
-
-
-    /*
-     ========================================================
-     TESTE → ACEITA : 0
-     ========================================================
-    */
-
-    machine.edges.push({
-
-        id:
-            machine.nextEdgeId++,
-
-        from:
-            test.id,
-
-        to:
-            accept.id,
-
-        label:
-            "0",
-
-        bendOffsetX:
-            0,
-
-        bendOffsetY:
-            30
-
-    });
-
-
-    /*
-     ========================================================
-     TESTE → ACEITA : ε
-     ========================================================
-    */
-
-    machine.edges.push({
-
-        id:
-            machine.nextEdgeId++,
-
-        from:
-            test.id,
-
-        to:
-            accept.id,
-
-        label:
-            "ε",
-
-        bendOffsetX:
-            0,
-
-        bendOffsetY:
-            -30
-
-    });
-
-
-    /*
-     ========================================================
-     TESTE → REJEITA : 1
-     ========================================================
-    */
-
-    machine.edges.push({
-
-        id:
-            machine.nextEdgeId++,
-
-        from:
-            test.id,
-
-        to:
-            reject.id,
-
-        label:
-            "1",
-
-        bendOffsetX:
-            0,
-
-        bendOffsetY:
-            -30
-
-    });
-
-
-    /*
-     ========================================================
-     TESTE → REJEITA : #
-     ========================================================
-    */
-
-    machine.edges.push({
-
-        id:
-            machine.nextEdgeId++,
-
-        from:
-            test.id,
-
-        to:
-            reject.id,
-
-        label:
-            "#",
-
-        bendOffsetX:
-            0,
-
-        bendOffsetY:
-            30
-
-    });
-
 
     render();
 
+    applyView();
 
-    /*
-     ========================================================
-     ENTRADA DO EXEMPLO
-     ========================================================
-    */
-
-    const input =
-        document.getElementById(
-            "inputWord"
-        );
-
+    const input = document.getElementById("inputWord");
 
     if (input) {
-
-        input.value =
-            "0";
-
+        input.value = spec.input;
     }
-
 
     canvasScroll.scrollLeft = 0;
     canvasScroll.scrollTop = 0;
@@ -4520,13 +4744,13 @@ function setTestTransition(test, symbol, targetValue) {
             o => o !== edge && o.from === test.id && o.to === to
         ).length;
 
-        const bendOffsetY = [0, 30, -30, 45][parallel] ?? 0;
 
         if (edge) {
 
             edge.to = to;
             edge.bendOffsetX = 0;
-            edge.bendOffsetY = bendOffsetY;
+            edge.bendOffsetY = 0;
+            edge.manual = false;
 
         } else {
 
@@ -4536,7 +4760,7 @@ function setTestTransition(test, symbol, targetValue) {
                 to,
                 label: symbol,
                 bendOffsetX: 0,
-                bendOffsetY
+                bendOffsetY: 0
             });
 
         }

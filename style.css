@@ -668,3 +668,28 @@ button.toggle-on {
 .transition-row.missing select {
     border-style: dashed;
 }
+
+
+/* MENU DE EXEMPLOS (barra de ferramentas) */
+
+.example-select {
+    font: inherit;
+
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    background: var(--surface);
+    color: var(--ink);
+
+    padding: 6px 8px;
+    cursor: pointer;
+}
+
+@media (max-width: 1000px) {
+
+    .example-select {
+        flex: 1 1 auto;
+        min-height: 42px;
+        font-size: 16px;
+    }
+
+}

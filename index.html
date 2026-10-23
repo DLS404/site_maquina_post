@@ -38,8 +38,15 @@
         <button onclick="deleteSelected()">Excluir</button>
         <button onclick="undo()">Desfazer</button>
         <button id="selectModeButton" class="touch-only" onclick="toggleSelectMode()">Selecionar área</button>
+        <button id="fitButton" class="touch-only" onclick="toggleFit()">Ajustar à tela</button>
         <button onclick="newMachine()">Nova máquina</button>
-        <button onclick="loadExample()">Exemplo</button>
+        <select id="exampleSelect" class="example-select" onchange="loadExample(this.value); this.value = '';" title="Carrega uma máquina pronta">
+            <option value="">Exemplos…</option>
+            <option value="zero">Começa com 0</option>
+            <option value="contem1">Contém pelo menos um 1</option>
+            <option value="anbn">aⁿbⁿ</option>
+            <option value="anbncn">aⁿbⁿcⁿ</option>
+        </select>
     </div>
 
 </div>

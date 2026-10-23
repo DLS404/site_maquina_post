@@ -54,7 +54,7 @@ O botão **Validar** (e a própria execução) confere se a máquina está em or
 Se faltar uma transição, o painel de propriedades do teste marca a linha que está faltando. Se a máquina não tiver nenhum estado Aceita, aparece só um aviso, já que isso não impede de rodar.
 
 **Extras**
-- Botão **Exemplo**, que carrega uma máquina pronta (alfabeto `{0, 1}`) para você ver tudo funcionando de cara.
+- Menu **Exemplos…**, com máquinas prontas para começar com `0`, reconhecer palavras que contêm `1`, reconhecer `aⁿbⁿ` e reconhecer `aⁿbⁿcⁿ`.
 - Botão **Nova máquina**, para começar do zero.
 - Tema claro e escuro. O site respeita o tema do seu sistema e lembra a sua escolha.
 
@@ -69,7 +69,7 @@ Se faltar uma transição, o painel de propriedades do teste marca a linha que e
 5. Clique em **Validar** para ver se está tudo certo.
 6. Clique em **Executar** ou vá no **Passo** para acompanhar de perto.
 
-Se você só quer ver funcionando, clique em **Exemplo** e depois em **Executar**.
+Se você só quer ver funcionando, escolha uma opção em **Exemplos…** e depois clique em **Executar**.
 
 ### Atalhos
 
@@ -92,6 +92,7 @@ Funciona também. A interface se adapta em telas pequenas:
 - o canvas é maior que a tela, então você arrasta o fundo para navegar;
 - arrastar um estado move o estado;
 - tem um botão **Selecionar área**, que só aparece em telas de toque, para fazer a seleção múltipla com o dedo;
+- o botão **Ajustar à tela** alterna entre reduzir o canvas para caber na tela e voltar ao tamanho real;
 - os botões e campos ficam maiores, e os campos usam fonte de 16 px para o iOS não dar zoom quando você toca neles.
 
 ---
