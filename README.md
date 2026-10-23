@@ -125,5 +125,4 @@ Algumas decisões que valem saber:
 ## Ideias para o futuro
 
 - Exportar e importar a máquina em JSON.
-- Mais exemplos prontos (por exemplo, reconhecer `aⁿbⁿ`).
 - Mostrar o histórico de configurações da execução em uma lista.
